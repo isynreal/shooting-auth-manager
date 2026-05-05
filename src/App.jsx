@@ -96,6 +96,9 @@ export default function App() {
 // ============================================================================
 // 🌟 模式一：學員歷史成績視角 
 // ============================================================================
+// ============================================================================
+// 🌟 模式一：學員歷史成績視角 (StudentHistoryView)
+// ============================================================================
 function StudentHistoryView({ authCode }) {
   const [records, setRecords] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -103,6 +106,7 @@ function StudentHistoryView({ authCode }) {
 
   useEffect(() => {
     setLoading(true);
+    // 🌟 這裡 Firebase 依然會根據上傳建立的時間由新到舊排
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', HISTORIES_COLLECTION), where('code', '==', authCode), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => {
@@ -149,7 +153,11 @@ function StudentHistoryView({ authCode }) {
                     <motion.div layout key={rec.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ delay: index * 0.05 }}
                       onClick={() => setSelectedIndex(index)}
                       className={`p-4 rounded-xl cursor-pointer border transition-all ${isSelected ? 'bg-[#2EB1E3]/20 border-[#2EB1E3] shadow-[0_0_15px_rgba(46,177,227,0.3)]' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
-                      <div className="font-bold text-lg text-white mb-1">{rec.detail.studentName}</div>
+                      <div className="flex justify-between items-center mb-1">
+                        <div className="font-bold text-lg text-white">{rec.detail.studentName}</div>
+                        {/* 🌟 這裡直接顯示 Unity 建立的精確時間 */}
+                        <div className="text-xs text-gray-400 font-mono">{rec.detail.timestamp}</div>
+                      </div>
                       <div className="text-sm text-gray-400 flex justify-between">
                         <span>總分：<span className={isSelected ? 'text-[#7BC158] font-bold' : 'text-white'}>{total} 分</span></span>
                         <span>{rec.detail.scores.length} 發</span>
@@ -164,6 +172,9 @@ function StudentHistoryView({ authCode }) {
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={selectedIndex} className="flex-1">
                 <GlassCard className="border-white/10 p-6 md:p-10 flex flex-col items-center h-full">
                   <h3 className="text-2xl font-bold text-white mb-2">{selectedRecord.studentName} 的射擊報告</h3>
+                  {/* 🌟 卡片上方也補上時間顯示 */}
+                  <p className="text-gray-400 text-sm mb-6 font-mono tracking-wider">{selectedRecord.timestamp}</p>
+                  
                   <h4 className="text-xl text-[#f1c40f] font-bold mb-8">總成績：{selectedRecord.scores.reduce((a, b) => a + b, 0)} 分</h4>
 
                   <div className="flex flex-col md:flex-row items-center gap-10 w-full justify-center">
