@@ -6,10 +6,11 @@ import {
   serverTimestamp, onSnapshot, orderBy, limit, startAfter, where, getCountFromServer
 } from 'firebase/firestore';
 import { 
-  Plus, Copy, Clock, CheckCircle, 
+  Shield, Plus, Copy, Clock, CheckCircle, 
   Check, Trash2, User, Lock, LogOut, Edit3,
-  Search, Calendar, X, ChevronLeft, ChevronRight, Loader2,
-  QrCode, Link as LinkIcon, BarChart3, ChevronDown, ChevronUp, Filter
+  Search, Calendar, X, ChevronLeft, ChevronRight, Loader2, Target,
+  QrCode, Download, Link as LinkIcon, BarChart3, ChevronDown, ChevronUp, Filter,
+  MousePointerClick
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -250,7 +251,6 @@ function AdminApp() {
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
                   <div className="flex justify-between h-20 items-center">
                     <div className="flex items-center gap-4">
-                      {/* 🌟 替換為企業 LOGO */}
                       <img src="/logo.png" alt="iSynReal Logo" className="h-10 md:h-12 object-contain drop-shadow-[0_0_15px_rgba(46,177,227,0.4)] transition-transform hover:scale-105" />
                       <span className="font-bold text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-300 border-l-2 border-white/20 pl-4">
                         宇騫-數位打靶授權系統
@@ -293,7 +293,6 @@ function LoginPage({ setAdminUser, loading, setLoading }) {
       <div className="w-full max-w-md">
         <GlassCard className="border-white/10 p-10 border-t border-white/20">
           <div className="text-center mb-10">
-            {/* 🌟 替換為企業 LOGO */}
             <motion.img 
               initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring" }}
               src="/logo.png" alt="iSynReal Logo" className="h-16 md:h-20 mx-auto object-contain drop-shadow-[0_0_20px_rgba(46,177,227,0.4)] mb-6" 
@@ -340,6 +339,22 @@ function AdminDashboard() {
   
   const [allCodes, setAllCodes] = useState([]); 
   const [isDataLoading, setIsDataLoading] = useState(true);
+
+  // 🌟 新手教學狀態管理
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  useEffect(() => {
+    // 檢查 localStorage 是否有看過教學的紀錄
+    const hasSeen = localStorage.getItem('hasSeenTutorial');
+    if (!hasSeen) {
+      setShowTutorial(true);
+    }
+  }, []);
+
+  const completeTutorial = () => {
+    localStorage.setItem('hasSeenTutorial', 'true');
+    setShowTutorial(false);
+  };
 
   useEffect(() => {
     getCountFromServer(collection(db, 'artifacts', appId, 'public', 'data', CODES_COLLECTION))
@@ -437,7 +452,11 @@ function AdminDashboard() {
 
   return (
     <div className="flex flex-col w-full gap-5">
-      
+      {/* 🌟 彈出式新手教學 */}
+      <AnimatePresence>
+        {showTutorial && <TutorialOverlay onComplete={completeTutorial} />}
+      </AnimatePresence>
+
       <div className="flex items-center justify-between">
         <h3 className="text-xl font-bold text-white pl-3 border-l-4 border-[#2EB1E3] flex items-center gap-2">已建立的驗證碼清單 {isDataLoading && <Loader2 className="w-4 h-4 text-[#2EB1E3] animate-spin" />}</h3>
         {isSearchActive ? <span className="bg-[#2EB1E3]/20 px-4 py-1 rounded-full text-xs font-bold text-[#2EB1E3] border border-[#2EB1E3]/30">過濾後 {displayedCodes.length} 筆</span> : <span className="bg-white/10 px-4 py-1 rounded-full text-xs text-gray-300 border border-white/10">第 {page + 1} 頁</span>}
@@ -457,7 +476,6 @@ function AdminDashboard() {
         </div>
       </div>
 
-      {/* 🌟 將「產生按鈕」與「統計面板」群組化，避免動畫收起時的 Gap 塌陷瞬移 */}
       <div className="flex flex-col w-full">
         <div className="flex flex-col lg:flex-row gap-4 w-full">
           <GlassCard className="flex-1 border-white/10 p-4 relative overflow-hidden flex flex-col sm:flex-row items-center gap-4">
@@ -492,7 +510,6 @@ function AdminDashboard() {
           </GlassCard>
         </div>
 
-        {/* 🌟 嚴格控制動畫外框，利用內部的 padding 代替外部的 margin/gap，保證收合滑順 */}
         <AnimatePresence>
           {isStatsOpen && (
             <motion.div 
@@ -539,6 +556,88 @@ function AdminDashboard() {
           <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="p-2 rounded-full bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-white/5 border border-white/10 transition-colors"><ChevronRight className="w-6 h-6 text-white" /></button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================================
+// 🌟 彈出式新手教學元件
+// ============================================================================
+function TutorialOverlay({ onComplete }) {
+  const [step, setStep] = useState(0);
+
+  const tutorialSteps = [
+    {
+      title: "👋 歡迎使用授權系統",
+      desc: "這是您第一次在此裝置登入。\n接下來將帶您快速了解系統的核心功能。"
+    },
+    {
+      title: "✨ 產生專屬序號",
+      desc: "在上方輸入天數（預設 99999 為買斷制），點擊「建立」即可產生一組不含混淆字元的安全授權碼。"
+    },
+    {
+      title: "📊 標籤過濾與統計",
+      desc: "點開「總資料數」面板，可以即時查看未啟用與已過期的數量，點擊這些狀態還能快速過濾下方的清單！"
+    },
+    {
+      title: "📝 備註自動儲存",
+      desc: "每一張序號卡片的右下角，您可以直接輸入綁定者名稱。輸入完成後「點擊畫面任一處」，系統就會自動在背景儲存！"
+    },
+    {
+      title: "📱 快速分享成績單",
+      desc: "點擊卡片上的「複製成績網址」或「下載 QR 圖片」，學員只要掃描或點擊，就能在手機/電腦上看到專屬的射擊歷史報告。\n\n🎉 點擊畫面結束教學，開始體驗！"
+    }
+  ];
+
+  const handleNext = () => {
+    if (step < tutorialSteps.length - 1) {
+      setStep(step + 1);
+    } else {
+      onComplete();
+    }
+  };
+
+  return (
+    <div 
+      onClick={handleNext} 
+      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-4 cursor-pointer"
+    >
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={step}
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -20, scale: 0.95 }}
+          transition={{ duration: 0.3 }}
+          className="bg-[#151822]/90 backdrop-blur-2xl border border-white/20 shadow-[0_0_50px_rgba(46,177,227,0.2)] rounded-3xl p-8 max-w-lg text-center w-full"
+        >
+          <div className="w-16 h-16 bg-[#2EB1E3]/20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(46,177,227,0.3)]">
+            <Shield className="w-8 h-8 text-[#2EB1E3]" />
+          </div>
+          <h2 className="text-2xl font-extrabold text-white mb-4 tracking-wide">{tutorialSteps[step].title}</h2>
+          <p className="text-gray-300 whitespace-pre-line leading-relaxed text-lg min-h-[100px] flex items-center justify-center">
+            {tutorialSteps[step].desc}
+          </p>
+          
+          <div className="flex justify-center gap-3 mt-8">
+            {tutorialSteps.map((_, i) => (
+              <div 
+                key={i} 
+                className={`h-2 rounded-full transition-all duration-300 ${i === step ? 'bg-[#2EB1E3] w-6 shadow-[0_0_10px_rgba(46,177,227,0.5)]' : 'bg-white/20 w-2'}`} 
+              />
+            ))}
+          </div>
+        </motion.div>
+      </AnimatePresence>
+      
+      {/* 提示點擊的動畫文字 */}
+      <motion.div 
+        animate={{ opacity: [0.4, 1, 0.4], y: [0, 5, 0] }}
+        transition={{ duration: 2, repeat: Infinity }}
+        className="mt-8 text-gray-400 flex items-center gap-2 font-bold tracking-widest"
+      >
+        <MousePointerClick className="w-5 h-5" /> 點擊畫面任意處繼續
+      </motion.div>
     </div>
   );
 }
