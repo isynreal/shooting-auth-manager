@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, query, getDocs, 
@@ -9,8 +9,8 @@ import {
   Shield, Plus, Copy, Clock, CheckCircle, 
   Check, Trash2, User, Lock, LogOut, Edit3,
   Search, Calendar, X, ChevronLeft, ChevronRight, Loader2, Target,
-  QrCode, Download, Link as LinkIcon, BarChart3, ChevronDown, ChevronUp, Filter,
-  MousePointerClick
+  QrCode, Link as LinkIcon, BarChart3, ChevronDown, ChevronUp, Filter,
+  MousePointerClick, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -65,14 +65,14 @@ const isCodeExpired = (item) => {
 };
 
 // --- 🍏 蘋果風 UI 元件 ---
-const GlassButton = ({ children, onClick, className = "", disabled = false, type = "button" }) => (
-  <motion.button type={type} disabled={disabled} onClick={onClick} whileHover={{ scale: disabled ? 1 : 1.02 }} whileTap={{ scale: disabled ? 1 : 0.95 }}
+const GlassButton = ({ children, onClick, className = "", disabled = false, type = "button", id }) => (
+  <motion.button id={id} type={type} disabled={disabled} onClick={onClick} whileHover={{ scale: disabled ? 1 : 1.02 }} whileTap={{ scale: disabled ? 1 : 0.95 }}
     className={`relative overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 shadow-lg text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-white/20 ${className}`}>
     {children}
   </motion.button>
 );
-const GlassCard = ({ children, className = "" }) => (
-  <div className={`bg-[#151822]/60 backdrop-blur-xl border shadow-2xl rounded-2xl overflow-hidden ${className}`}>{children}</div>
+const GlassCard = ({ children, className = "", id }) => (
+  <div id={id} className={`bg-[#151822]/60 backdrop-blur-xl border shadow-2xl rounded-2xl overflow-hidden ${className}`}>{children}</div>
 );
 
 // --- 主要 App 組件 ---
@@ -247,20 +247,20 @@ function AdminApp() {
             </motion.div>
           ) : (
             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <nav className="bg-black/30 backdrop-blur-2xl border-b border-white/10 sticky top-0 z-50 shadow-2xl">
+              <nav className="bg-black/30 backdrop-blur-2xl border-b border-white/10 sticky top-0 z-50 shadow-2xl relative z-40">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
                   <div className="flex justify-between h-20 items-center">
                     <div className="flex items-center gap-4">
                       <img src="/logo.png" alt="iSynReal Logo" className="h-10 md:h-12 object-contain drop-shadow-[0_0_15px_rgba(46,177,227,0.4)] transition-transform hover:scale-105" />
-                      <span className="font-bold text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-300 border-l-2 border-white/20 pl-4">
-                        宇騫-數位打靶授權系統
+                      <span className="font-bold text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-300 border-l-2 border-white/20 pl-4 hidden sm:inline-block">
+                        數位打靶授權系統
                       </span>
                     </div>
                     <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full border border-white/10"><LogOut className="w-4 h-4" /> 登出</button>
                   </div>
                 </div>
               </nav>
-              <main className="max-w-6xl mx-auto py-10 px-4 sm:px-6 lg:px-8 flex flex-col gap-8">
+              <main className="max-w-6xl mx-auto py-10 px-4 sm:px-6 lg:px-8 flex flex-col gap-8 relative z-30">
                 <AdminDashboard />
               </main>
             </motion.div>
@@ -298,7 +298,7 @@ function LoginPage({ setAdminUser, loading, setLoading }) {
               src="/logo.png" alt="iSynReal Logo" className="h-16 md:h-20 mx-auto object-contain drop-shadow-[0_0_20px_rgba(46,177,227,0.4)] mb-6" 
             />
             <h2 className="text-3xl font-extrabold text-white mb-2">管理員登入</h2>
-            <p className="text-[#7BC158] font-medium tracking-wide">宇騫-數位打靶授權系統</p>
+            <p className="text-[#7BC158] font-medium tracking-wide">數位打靶授權系統</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="relative">
@@ -340,21 +340,16 @@ function AdminDashboard() {
   const [allCodes, setAllCodes] = useState([]); 
   const [isDataLoading, setIsDataLoading] = useState(true);
 
-  // 🌟 新手教學狀態管理
+  // 🌟 新手教學狀態
   const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
-    // 檢查 localStorage 是否有看過教學的紀錄
-    const hasSeen = localStorage.getItem('hasSeenTutorial');
+    const hasSeen = localStorage.getItem('hasSeenTutorialV2');
     if (!hasSeen) {
-      setShowTutorial(true);
+      // 稍微延遲一下，確保底下的 DOM 都畫好了再來量座標
+      setTimeout(() => setShowTutorial(true), 500);
     }
   }, []);
-
-  const completeTutorial = () => {
-    localStorage.setItem('hasSeenTutorial', 'true');
-    setShowTutorial(false);
-  };
 
   useEffect(() => {
     getCountFromServer(collection(db, 'artifacts', appId, 'public', 'data', CODES_COLLECTION))
@@ -452,9 +447,9 @@ function AdminDashboard() {
 
   return (
     <div className="flex flex-col w-full gap-5">
-      {/* 🌟 彈出式新手教學 */}
+      {/* 🌟 聚光燈新手教學 */}
       <AnimatePresence>
-        {showTutorial && <TutorialOverlay onComplete={completeTutorial} />}
+        {showTutorial && <SpotlightTutorial onComplete={() => { localStorage.setItem('hasSeenTutorialV2', 'true'); setShowTutorial(false); }} />}
       </AnimatePresence>
 
       <div className="flex items-center justify-between">
@@ -462,7 +457,7 @@ function AdminDashboard() {
         {isSearchActive ? <span className="bg-[#2EB1E3]/20 px-4 py-1 rounded-full text-xs font-bold text-[#2EB1E3] border border-[#2EB1E3]/30">過濾後 {displayedCodes.length} 筆</span> : <span className="bg-white/10 px-4 py-1 rounded-full text-xs text-gray-300 border border-white/10">第 {page + 1} 頁</span>}
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+      <div id="tour-search" className="flex flex-col md:flex-row gap-4 bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/10">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-3 w-5 h-5 text-gray-400" />
           <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="搜尋備註或序號..." className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-11 pr-10 text-white focus:outline-none focus:border-[#2EB1E3]/50 focus:bg-white/5 transition-all" />
@@ -478,7 +473,7 @@ function AdminDashboard() {
 
       <div className="flex flex-col w-full">
         <div className="flex flex-col lg:flex-row gap-4 w-full">
-          <GlassCard className="flex-1 border-white/10 p-4 relative overflow-hidden flex flex-col sm:flex-row items-center gap-4">
+          <GlassCard id="tour-generate" className="flex-1 border-white/10 p-4 relative overflow-hidden flex flex-col sm:flex-row items-center gap-4">
             <div className="absolute right-[-20%] top-[-20%] w-32 h-32 bg-[#7BC158]/20 rounded-full blur-[40px] pointer-events-none"></div>
             <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
               <Plus className="w-5 h-5 text-[#7BC158]" />
@@ -495,7 +490,7 @@ function AdminDashboard() {
             </div>
           </GlassCard>
 
-          <GlassCard className="flex-1 border-white/10 p-4">
+          <GlassCard id="tour-stats" className="flex-1 border-white/10 p-4">
             <div onClick={() => setIsStatsOpen(!isStatsOpen)} className="flex items-center justify-between cursor-pointer group h-full">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-[#2EB1E3]/20 rounded-lg"><BarChart3 className="w-5 h-5 text-[#2EB1E3]" /></div>
@@ -512,13 +507,7 @@ function AdminDashboard() {
 
         <AnimatePresence>
           {isStatsOpen && (
-            <motion.div 
-              initial={{ height: 0, opacity: 0 }} 
-              animate={{ height: 'auto', opacity: 1 }} 
-              exit={{ height: 0, opacity: 0 }} 
-              transition={{ duration: 0.3, ease: "easeInOut" }}
-              className="overflow-hidden"
-            >
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: "easeInOut" }} className="overflow-hidden">
               <div className="pt-4">
                 <GlassCard className="p-4 border-white/10 flex flex-col sm:flex-row gap-4">
                   <div onClick={() => toggleFilter('unused')} className={`flex-1 flex justify-between items-center p-3 rounded-xl cursor-pointer transition-all border ${statusFilters.includes('unused') ? 'bg-white/20 border-white shadow-lg' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
@@ -542,7 +531,7 @@ function AdminDashboard() {
 
       <motion.div layout className="flex flex-col gap-5 w-full">
         <AnimatePresence mode="popLayout">
-          {displayedCodes.map(item => <CodeItem key={item.id} item={item} />)}
+          {displayedCodes.map((item, index) => <CodeItem key={item.id} item={item} isFirst={index === 0} />)}
         </AnimatePresence>
         {displayedCodes.length === 0 && !isDataLoading && (
           <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="col-span-full py-20 text-center bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 border-dashed"><p className="text-gray-400">找不到符合條件的資料。</p></motion.div>
@@ -561,91 +550,9 @@ function AdminDashboard() {
 }
 
 // ============================================================================
-// 🌟 彈出式新手教學元件
-// ============================================================================
-function TutorialOverlay({ onComplete }) {
-  const [step, setStep] = useState(0);
-
-  const tutorialSteps = [
-    {
-      title: "👋 歡迎使用授權系統",
-      desc: "這是您第一次在此裝置登入。\n接下來將帶您快速了解系統的核心功能。"
-    },
-    {
-      title: "✨ 產生專屬序號",
-      desc: "在上方輸入天數（預設 99999 為買斷制），點擊「建立」即可產生一組不含混淆字元的安全授權碼。"
-    },
-    {
-      title: "📊 標籤過濾與統計",
-      desc: "點開「總資料數」面板，可以即時查看未啟用與已過期的數量，點擊這些狀態還能快速過濾下方的清單！"
-    },
-    {
-      title: "📝 備註自動儲存",
-      desc: "每一張序號卡片的右下角，您可以直接輸入綁定者名稱。輸入完成後「點擊畫面任一處」，系統就會自動在背景儲存！"
-    },
-    {
-      title: "📱 快速分享成績單",
-      desc: "點擊卡片上的「複製成績網址」或「下載 QR 圖片」，學員只要掃描或點擊，就能在手機/電腦上看到專屬的射擊歷史報告。\n\n🎉 點擊畫面結束教學，開始體驗！"
-    }
-  ];
-
-  const handleNext = () => {
-    if (step < tutorialSteps.length - 1) {
-      setStep(step + 1);
-    } else {
-      onComplete();
-    }
-  };
-
-  return (
-    <div 
-      onClick={handleNext} 
-      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-4 cursor-pointer"
-    >
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={step}
-          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -20, scale: 0.95 }}
-          transition={{ duration: 0.3 }}
-          className="bg-[#151822]/90 backdrop-blur-2xl border border-white/20 shadow-[0_0_50px_rgba(46,177,227,0.2)] rounded-3xl p-8 max-w-lg text-center w-full"
-        >
-          <div className="w-16 h-16 bg-[#2EB1E3]/20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(46,177,227,0.3)]">
-            <Shield className="w-8 h-8 text-[#2EB1E3]" />
-          </div>
-          <h2 className="text-2xl font-extrabold text-white mb-4 tracking-wide">{tutorialSteps[step].title}</h2>
-          <p className="text-gray-300 whitespace-pre-line leading-relaxed text-lg min-h-[100px] flex items-center justify-center">
-            {tutorialSteps[step].desc}
-          </p>
-          
-          <div className="flex justify-center gap-3 mt-8">
-            {tutorialSteps.map((_, i) => (
-              <div 
-                key={i} 
-                className={`h-2 rounded-full transition-all duration-300 ${i === step ? 'bg-[#2EB1E3] w-6 shadow-[0_0_10px_rgba(46,177,227,0.5)]' : 'bg-white/20 w-2'}`} 
-              />
-            ))}
-          </div>
-        </motion.div>
-      </AnimatePresence>
-      
-      {/* 提示點擊的動畫文字 */}
-      <motion.div 
-        animate={{ opacity: [0.4, 1, 0.4], y: [0, 5, 0] }}
-        transition={{ duration: 2, repeat: Infinity }}
-        className="mt-8 text-gray-400 flex items-center gap-2 font-bold tracking-widest"
-      >
-        <MousePointerClick className="w-5 h-5" /> 點擊畫面任意處繼續
-      </motion.div>
-    </div>
-  );
-}
-
-// ============================================================================
 // 🌟 單筆序號卡片
 // ============================================================================
-function CodeItem({ item }) {
+function CodeItem({ item, isFirst }) {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -780,7 +687,7 @@ function CodeItem({ item }) {
               <span className="text-gray-400 text-xs whitespace-nowrap shrink-0">綁定裝置 (MAC)</span>
               <span className="text-white font-mono text-xs truncate" title={item.boundMac}>{item.boundMac || '尚未綁定'}</span>
            </div>
-           <div className="flex-[2] flex items-center bg-[#2EB1E3]/10 px-4 py-3 rounded-xl border border-[#2EB1E3]/20 relative group/input gap-3 shrink-0">
+           <div id={isFirst ? "tour-input" : undefined} className="flex-[2] flex items-center bg-[#2EB1E3]/10 px-4 py-3 rounded-xl border border-[#2EB1E3]/20 relative group/input gap-3 shrink-0">
               <span className="text-[#2EB1E3] flex items-center gap-1.5 text-xs whitespace-nowrap shrink-0"><Edit3 className="w-3.5 h-3.5" /> 備註/綁定者</span>
               <div className="flex items-center relative w-full">
                   <input type="text" value={boundUserInput} onChange={(e) => setBoundUserInput(e.target.value)} onBlur={handleSaveBoundUser} placeholder="點擊輸入..." className="w-full bg-transparent text-white font-bold text-sm focus:outline-none focus:border-b focus:border-[#2EB1E3] pb-0.5 placeholder-gray-500 transition-colors text-right sm:text-left" />
@@ -790,5 +697,140 @@ function CodeItem({ item }) {
         </div>
       </div>
     </motion.div>
+  );
+}
+
+// ============================================================================
+// 🌟 SVG 聚光燈新手教學系統 (Coach Marks)
+// ============================================================================
+function SpotlightTutorial({ onComplete }) {
+  const [step, setStep] = useState(0);
+  const [targetRect, setTargetRect] = useState(null);
+
+  const steps = useMemo(() => [
+    { id: null, title: "👋 歡迎使用", desc: "這是您第一次在此裝置登入。\n點擊畫面任何地方，快速了解系統核心功能！", align: "center" },
+    { id: "tour-generate", title: "✨ 產生專屬序號", desc: "輸入天數（預設 99999 為買斷制），\n點擊建立即可產生一組安全授權碼。", align: "bottom" },
+    { id: "tour-stats", title: "📊 標籤過濾與統計", desc: "點開面板可以查看狀態，\n並點擊標籤快速過濾下方的清單！", align: "bottom" },
+    { id: "tour-search", title: "🔍 搜尋與日期", desc: "隨時利用關鍵字或日期區間，\n快速找回過往的序號紀錄。", align: "bottom" },
+    { id: "tour-input", title: "📝 備註自動儲存", desc: "在卡片右下角輸入綁定者名稱。\n點擊畫面其他處，系統就會自動儲存！", align: "top" },
+    { id: null, title: "🚀 準備就緒", desc: "點擊卡片上的按鈕，即可將成績網址分享給學員。\n\n🎉 點擊畫面結束教學！", align: "center" }
+  ], []);
+
+  const measureTarget = useCallback(() => {
+    const currentId = steps[step].id;
+    if (!currentId) {
+      setTargetRect(null);
+      return;
+    }
+    const el = document.getElementById(currentId);
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      // 讓目標自動平滑滾動到畫面中間
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // 延遲一下讓捲動完成後再抓座標，畫面更順
+      setTimeout(() => {
+        const updatedRect = el.getBoundingClientRect();
+        setTargetRect({
+          x: updatedRect.left - 12,
+          y: updatedRect.top - 12,
+          w: updatedRect.width + 24,
+          h: updatedRect.height + 24
+        });
+      }, 300);
+    } else {
+      setTargetRect(null);
+    }
+  }, [step, steps]);
+
+  useEffect(() => {
+    measureTarget();
+    window.addEventListener('resize', measureTarget);
+    return () => window.removeEventListener('resize', measureTarget);
+  }, [measureTarget]);
+
+  const handleNext = () => {
+    if (step < steps.length - 1) setStep(step + 1);
+    else onComplete();
+  };
+
+  // 計算引導線與提示框的位置
+  let tooltipStyle = { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+  let linePath = null;
+
+  if (targetRect && steps[step].align !== "center") {
+    const cx = targetRect.x + targetRect.w / 2;
+    if (steps[step].align === "bottom") {
+      tooltipStyle = { top: targetRect.y + targetRect.h + 40, left: Math.min(Math.max(cx, 160), window.innerWidth - 160), transform: 'translate(-50%, 0)' };
+      linePath = `M ${cx} ${targetRect.y + targetRect.h} L ${cx} ${targetRect.y + targetRect.h + 40}`;
+    } else {
+      tooltipStyle = { bottom: window.innerHeight - targetRect.y + 40, left: Math.min(Math.max(cx, 160), window.innerWidth - 160), transform: 'translate(-50%, 0)' };
+      linePath = `M ${cx} ${targetRect.y} L ${cx} ${targetRect.y - 40}`;
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] cursor-pointer" onClick={handleNext}>
+      {/* 🌟 SVG 聚光燈遮罩 */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none transition-all duration-500">
+        <defs>
+          <mask id="spotlight-mask">
+            <rect x="0" y="0" width="100%" height="100%" fill="white" />
+            {targetRect && (
+              <motion.rect 
+                initial={false}
+                animate={{ x: targetRect.x, y: targetRect.y, width: targetRect.w, height: targetRect.h }}
+                transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                rx="20" fill="black" 
+              />
+            )}
+          </mask>
+        </defs>
+        <rect x="0" y="0" width="100%" height="100%" fill="rgba(10,10,12,0.85)" mask="url(#spotlight-mask)" />
+        
+        {/* 🌟 科技引導線 */}
+        {linePath && (
+          <motion.path 
+            initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: 1 }} transition={{ duration: 0.5, delay: 0.3 }}
+            d={linePath} stroke="#2EB1E3" strokeWidth="2" strokeDasharray="4 4" fill="none" 
+          />
+        )}
+        {targetRect && steps[step].align === "bottom" && (
+           <motion.circle initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3 }} cx={targetRect.x + targetRect.w / 2} cy={targetRect.y + targetRect.h} r="4" fill="#2EB1E3" />
+        )}
+        {targetRect && steps[step].align === "top" && (
+           <motion.circle initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3 }} cx={targetRect.x + targetRect.w / 2} cy={targetRect.y} r="4" fill="#2EB1E3" />
+        )}
+      </svg>
+
+      {/* 🌟 提示文字卡片 */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={step}
+          initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.95 }} transition={{ duration: 0.3, delay: targetRect ? 0.2 : 0 }}
+          className="absolute bg-[#151822] border border-[#2EB1E3]/50 shadow-[0_0_30px_rgba(46,177,227,0.3)] rounded-2xl p-6 text-center w-[320px] pointer-events-none"
+          style={tooltipStyle}
+        >
+          {steps[step].align === "center" && (
+            <div className="w-12 h-12 bg-[#2EB1E3]/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_15px_rgba(46,177,227,0.3)]">
+              <Sparkles className="w-6 h-6 text-[#2EB1E3]" />
+            </div>
+          )}
+          <h2 className="text-xl font-extrabold text-white mb-2">{steps[step].title}</h2>
+          <p className="text-gray-300 whitespace-pre-line text-sm leading-relaxed">{steps[step].desc}</p>
+          
+          <div className="flex justify-center gap-2 mt-6">
+            {steps.map((_, i) => (
+              <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === step ? 'bg-[#2EB1E3] w-5 shadow-[0_0_10px_rgba(46,177,227,0.5)]' : 'bg-white/20 w-1.5'}`} />
+            ))}
+          </div>
+          
+          {steps[step].align === "center" && (
+            <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 2, repeat: Infinity }} className="mt-4 text-[#2EB1E3] flex items-center justify-center gap-1.5 text-xs font-bold">
+              <MousePointerClick className="w-3.5 h-3.5" /> 點擊畫面繼續
+            </motion.div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </div>
   );
 }
