@@ -10,7 +10,7 @@ import {
   Check, Trash2, User, Lock, LogOut, Edit3,
   Search, Calendar, X, ChevronLeft, ChevronRight, Loader2, Target,
   QrCode, Link as LinkIcon, BarChart3, ChevronDown, ChevronUp, Filter,
-  MousePointerClick, Sparkles
+  MousePointerClick, Sparkles, Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -93,14 +93,17 @@ export default function App() {
 }
 
 // ============================================================================
-// 🌟 模式一：學員歷史成績視角 (全新明亮版 + 日期過濾)
+// 🌟 模式一與模式四：學員歷史成績視角 (雙模式解包切換)
 // ============================================================================
 function StudentHistoryView({ authCode }) {
-  const [records, setRecords] = useState([]);
+  const [mode1Records, setMode1Records] = useState([]);
+  const [mode4Records, setMode4Records] = useState([]);
+  const [activeMode, setActiveMode] = useState('Mode1'); // 'Mode1' 或 'Mode4'
+  
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   
-  // 🌟 日期過濾狀態
+  // 日期過濾狀態
   const [filterDate, setFilterDate] = useState('');
   const [hasSetInitDate, setHasSetInitDate] = useState(false);
 
@@ -108,19 +111,49 @@ function StudentHistoryView({ authCode }) {
     setLoading(true);
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', HISTORIES_COLLECTION), where('code', '==', authCode), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => {
-        const raw = doc.data();
-        const parsedPayload = raw.payload ? JSON.parse(raw.payload) : null;
-        return { id: doc.id, ...raw, detail: parsedPayload };
-      }).filter(item => item.detail !== null); 
-      
-      setRecords(data);
+      const m1 = [];
+      const m4 = [];
 
-      // 🌟 自動抓取最新的一天並設為預設過濾日期
-      if (data.length > 0 && !hasSetInitDate) {
-         const latestTimestamp = data[0].detail.timestamp; // 例如 "2026/05/05 14:11:09"
-         if (latestTimestamp) {
-            const datePart = latestTimestamp.split(' ')[0].replace(/\//g, '-'); // 轉成 YYYY-MM-DD
+      snapshot.docs.forEach(doc => {
+        const raw = doc.data();
+        if (!raw.payload) return;
+        try {
+          const parsed = JSON.parse(raw.payload);
+          // 判斷是否為 Mode 4 的資料
+          if (parsed.mode === 'Mode4') {
+            if (parsed.players && Array.isArray(parsed.players)) {
+              // 🌟 解包扁平化：把一局 4 個人拆開，並過濾掉沒開槍的靶位
+              parsed.players.forEach((p, idx) => {
+                if (p.firedCount > 0) {
+                  m4.push({
+                    id: `${doc.id}-${idx}`, 
+                    docId: doc.id,
+                    detail: { ...p, timestamp: parsed.timestamp, mode: 'Mode4' }
+                  });
+                }
+              });
+            }
+          } else {
+            // 原本的 Mode 1 資料
+            m1.push({ id: doc.id, docId: doc.id, detail: parsed });
+          }
+        } catch(e) {
+          console.warn("Payload 解析失敗:", e);
+        }
+      });
+      
+      setMode1Records(m1);
+      setMode4Records(m4);
+
+      // 自動抓取最新的一天並設為預設過濾日期
+      if (!hasSetInitDate) {
+         const latestM1 = m1[0]?.detail?.timestamp;
+         const latestM4 = m4[0]?.detail?.timestamp;
+         let latest = latestM1;
+         if (latestM4 && (!latestM1 || latestM4 > latestM1)) latest = latestM4;
+
+         if (latest) {
+            const datePart = latest.split(' ')[0].replace(/\//g, '-'); 
             setFilterDate(datePart);
             setHasSetInitDate(true);
          }
@@ -130,20 +163,23 @@ function StudentHistoryView({ authCode }) {
     return () => unsub();
   }, [authCode, hasSetInitDate]);
 
+  // 取得當下頁籤的資料集
+  const activeRecords = activeMode === 'Mode1' ? mode1Records : mode4Records;
+
   // 根據選擇的日期進行過濾
   const displayedRecords = useMemo(() => {
-    if (!filterDate) return records; // 如果清空日期，顯示全部
-    return records.filter(rec => {
+    if (!filterDate) return activeRecords; 
+    return activeRecords.filter(rec => {
        if (!rec.detail || !rec.detail.timestamp) return false;
        const recDate = rec.detail.timestamp.split(' ')[0].replace(/\//g, '-');
        return recDate === filterDate;
     });
-  }, [records, filterDate]);
+  }, [activeRecords, filterDate]);
 
-  // 當過濾結果改變時，自動選擇第一筆，避免破圖
+  // 當過濾結果或頁籤改變時，自動選擇第一筆
   useEffect(() => {
     setSelectedIndex(0);
-  }, [displayedRecords]);
+  }, [displayedRecords, activeMode]);
 
   const selectedRecord = displayedRecords[selectedIndex]?.detail;
 
@@ -151,14 +187,34 @@ function StudentHistoryView({ authCode }) {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="min-h-screen text-slate-800 font-sans relative bg-slate-50 selection:bg-blue-200">
       
       <div className="relative z-10 max-w-6xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
-        <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-center mb-8">
+        <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-center mb-6">
           <img src="/logo.png" alt="iSynReal Logo" className="h-14 md:h-16 mx-auto object-contain mb-4" />
           <h2 className="text-3xl font-extrabold text-slate-800 mb-2">戰術打靶紀錄查詢</h2>
           <p className="text-blue-600 font-bold tracking-wide">當前授權碼：{authCode}</p>
         </motion.div>
 
-        {/* 🌟 日曆過濾按鈕區塊 */}
-        {!loading && records.length > 0 && (
+        {/* 🌟 雙模式切換頁籤 */}
+        {!loading && (mode1Records.length > 0 || mode4Records.length > 0) && (
+          <div className="flex justify-center mb-8">
+            <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-sm inline-flex">
+              <button
+                onClick={() => setActiveMode('Mode1')}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold transition-all ${activeMode === 'Mode1' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Target className="w-5 h-5" /> 靶紙射擊 (單人)
+              </button>
+              <button
+                onClick={() => setActiveMode('Mode4')}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold transition-all ${activeMode === 'Mode4' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Users className="w-5 h-5" /> 人型靶紙 (多人)
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 日曆過濾按鈕區塊 */}
+        {!loading && activeRecords.length > 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm max-w-2xl mx-auto">
              <div className="flex items-center gap-3 w-full sm:w-auto justify-center">
                 <Calendar className="w-5 h-5 text-blue-600" />
@@ -185,9 +241,9 @@ function StudentHistoryView({ authCode }) {
           <div className="text-center text-slate-500 py-20 flex flex-col items-center gap-4">
              <Loader2 className="w-8 h-8 animate-spin text-blue-600" /> 正在載入歷史資料...
           </div>
-        ) : records.length === 0 ? (
+        ) : activeRecords.length === 0 ? (
           <GlassCard className="text-center py-20 border-dashed border-slate-300">
-            <p className="text-slate-500 font-medium">這個授權碼目前還沒有任何打靶紀錄喔！</p>
+            <p className="text-slate-500 font-medium">這個模式目前還沒有任何打靶紀錄喔！</p>
           </GlassCard>
         ) : displayedRecords.length === 0 ? (
           <GlassCard className="text-center py-20 border-dashed border-slate-300">
@@ -195,10 +251,11 @@ function StudentHistoryView({ authCode }) {
           </GlassCard>
         ) : (
           <div className="flex flex-col lg:flex-row gap-6">
+            
+            {/* 左側：歷史紀錄清單 */}
             <div className="w-full lg:w-1/3 space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
               <AnimatePresence>
                 {displayedRecords.map((rec, index) => {
-                  const total = rec.detail.scores.reduce((a, b) => a + b, 0);
                   const isSelected = index === selectedIndex;
                   return (
                     <motion.div layout key={rec.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ delay: index * 0.05 }}
@@ -208,9 +265,20 @@ function StudentHistoryView({ authCode }) {
                         <div className="font-bold text-lg text-slate-800">{rec.detail.studentName}</div>
                         <div className="text-xs text-slate-500 font-mono">{rec.detail.timestamp}</div>
                       </div>
-                      <div className="text-sm text-slate-600 flex justify-between">
-                        <span>總分：<span className={isSelected ? 'text-green-600 font-bold' : 'text-slate-800 font-bold'}>{total} 分</span></span>
-                        <span className="font-medium bg-slate-100 px-2 py-0.5 rounded-md">{rec.detail.scores.length} 發</span>
+                      
+                      {/* 依據不同模式顯示對應的列表縮圖資訊 */}
+                      <div className="text-sm text-slate-600 flex justify-between items-center mt-2">
+                        {activeMode === 'Mode1' ? (
+                          <>
+                            <span>總分：<span className={isSelected ? 'text-green-600 font-bold' : 'text-slate-800 font-bold'}>{rec.detail.scores.reduce((a, b) => a + b, 0)} 分</span></span>
+                            <span className="font-medium bg-slate-100 px-2 py-0.5 rounded-md text-xs">{rec.detail.scores.length} 發</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>命中：<span className={isSelected ? 'text-green-600 font-bold' : 'text-slate-800 font-bold'}>{rec.detail.hitCount} / {rec.detail.firedCount}</span></span>
+                            <span className="font-medium bg-slate-100 px-2 py-0.5 rounded-md text-xs">命中率 {((rec.detail.hitCount / rec.detail.firedCount) * 100).toFixed(0)}%</span>
+                          </>
+                        )}
                       </div>
                     </motion.div>
                   );
@@ -218,51 +286,120 @@ function StudentHistoryView({ authCode }) {
               </AnimatePresence>
             </div>
 
+            {/* 右側：詳細射擊報告 */}
             {selectedRecord && (
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={selectedRecord.timestamp} className="flex-1">
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={`${selectedRecord.timestamp}-${selectedRecord.studentName}`} className="flex-1">
                 <GlassCard className="p-6 md:p-10 flex flex-col items-center h-full">
                   <h3 className="text-2xl font-bold text-slate-800 mb-2">{selectedRecord.studentName} 的射擊報告</h3>
                   <p className="text-slate-500 text-sm mb-6 font-mono tracking-wider bg-slate-100 px-3 py-1 rounded-full">{selectedRecord.timestamp}</p>
                   
-                  <h4 className="text-xl text-blue-600 font-extrabold mb-8 bg-blue-50 px-6 py-2 rounded-full border border-blue-200">
-                    總成績：{selectedRecord.scores.reduce((a, b) => a + b, 0)} 分
-                  </h4>
-
-                  <div className="flex flex-col md:flex-row items-center gap-10 w-full justify-center">
-                    <div className="w-[300px] h-[300px] md:w-[350px] md:h-[350px] bg-white rounded-full shadow-[0_0_30px_rgba(0,0,0,0.1)] relative overflow-hidden border border-slate-200">
-                      <svg viewBox='-400 -400 800 800' className="w-full h-full">
-                        {[...Array(10)].map((_, i) => {
-                          const score = i + 1; const r = 400 - ((score - 1) * 40); const isBlackZone = score >= 8;
-                          return <circle key={`c-${score}`} cx='0' cy='0' r={r} fill={isBlackZone ? '#222' : 'white'} stroke={isBlackZone ? 'white' : '#cbd5e1'} strokeWidth='1.5' />;
-                        })}
-                        {[...Array(9)].map((_, i) => {
-                          const score = i + 1; const textRadius = (400 - ((score - 1) * 40)) - 20; const isBlackZone = score >= 8; const textColor = isBlackZone ? 'white' : '#64748b';
-                          return (
-                            <g key={`t-${score}`} fill={textColor} fontSize="18" fontFamily="Arial" fontWeight="bold" textAnchor="middle" dominantBaseline="central">
-                              <text x='0' y={-textRadius}>{score}</text><text x='0' y={textRadius}>{score}</text>
-                              <text x={-textRadius} y='0'>{score}</text><text x={textRadius} y='0'>{score}</text>
-                            </g>
-                          );
-                        })}
-                        <text x='0' y='0' fill='white' fontSize='18' fontFamily='Arial' fontWeight='bold' textAnchor='middle' dominantBaseline='central'>10</text>
-                        {selectedRecord.hitPositions.map((pos, i) => (
-                          <motion.circle initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5 + (i * 0.1), type: "spring" }} key={`hit-${i}`} cx={pos.x} cy={-pos.y} r='12' fill='#ef4444' stroke='#fde047' strokeWidth='3'/>
-                        ))}
-                      </svg>
-                    </div>
-
-                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 min-w-[220px] shadow-sm">
-                      <h5 className="text-slate-600 font-bold mb-4 border-b border-slate-200 pb-2">單發成績明細</h5>
-                      <div className="space-y-3">
-                        {selectedRecord.scores.map((s, i) => (
-                          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + (i * 0.05) }} key={i} className="flex justify-between text-lg items-center">
-                            <span className="text-slate-500 font-medium">第 {i + 1} 發</span>
-                            <span className={`font-extrabold ${s === 10 ? 'text-green-600' : s === 0 ? 'text-red-500' : 'text-slate-800'}`}>{s} 分</span>
-                          </motion.div>
-                        ))}
+                  {activeMode === 'Mode1' ? (
+                    // ==========================================
+                    // 🎯 Mode 1 (單人靶紙) 的詳細視圖
+                    // ==========================================
+                    <>
+                      <h4 className="text-xl text-blue-600 font-extrabold mb-8 bg-blue-50 px-6 py-2 rounded-full border border-blue-200">
+                        總成績：{selectedRecord.scores.reduce((a, b) => a + b, 0)} 分
+                      </h4>
+                      <div className="flex flex-col md:flex-row items-center gap-10 w-full justify-center">
+                        <div className="w-[300px] h-[300px] md:w-[350px] md:h-[350px] bg-white rounded-full shadow-[0_0_30px_rgba(0,0,0,0.1)] relative overflow-hidden border border-slate-200">
+                          <svg viewBox='-400 -400 800 800' className="w-full h-full">
+                            {[...Array(10)].map((_, i) => {
+                              const score = i + 1; const r = 400 - ((score - 1) * 40); const isBlackZone = score >= 8;
+                              return <circle key={`c-${score}`} cx='0' cy='0' r={r} fill={isBlackZone ? '#222' : 'white'} stroke={isBlackZone ? 'white' : '#cbd5e1'} strokeWidth='1.5' />;
+                            })}
+                            {[...Array(9)].map((_, i) => {
+                              const score = i + 1; const textRadius = (400 - ((score - 1) * 40)) - 20; const isBlackZone = score >= 8; const textColor = isBlackZone ? 'white' : '#64748b';
+                              return (
+                                <g key={`t-${score}`} fill={textColor} fontSize="18" fontFamily="Arial" fontWeight="bold" textAnchor="middle" dominantBaseline="central">
+                                  <text x='0' y={-textRadius}>{score}</text><text x='0' y={textRadius}>{score}</text>
+                                  <text x={-textRadius} y='0'>{score}</text><text x={textRadius} y='0'>{score}</text>
+                                </g>
+                              );
+                            })}
+                            <text x='0' y='0' fill='white' fontSize='18' fontFamily='Arial' fontWeight='bold' textAnchor='middle' dominantBaseline='central'>10</text>
+                            {selectedRecord.hitPositions.map((pos, i) => (
+                              <motion.circle initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5 + (i * 0.1), type: "spring" }} key={`hit-${i}`} cx={pos.x} cy={-pos.y} r='12' fill='#ef4444' stroke='#fde047' strokeWidth='3'/>
+                            ))}
+                          </svg>
+                        </div>
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 min-w-[220px] shadow-sm">
+                          <h5 className="text-slate-600 font-bold mb-4 border-b border-slate-200 pb-2">單發成績明細</h5>
+                          <div className="space-y-3">
+                            {selectedRecord.scores.map((s, i) => (
+                              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + (i * 0.05) }} key={i} className="flex justify-between text-lg items-center">
+                                <span className="text-slate-500 font-medium">第 {i + 1} 發</span>
+                                <span className={`font-extrabold ${s === 10 ? 'text-green-600' : s === 0 ? 'text-red-500' : 'text-slate-800'}`}>{s} 分</span>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    </>
+                  ) : (
+                    // ==========================================
+                    // 🧍‍♂️ Mode 4 (多人人型靶) 的詳細視圖
+                    // ==========================================
+                    <>
+                      <div className="flex gap-4 mb-8">
+                        <h4 className="text-lg text-green-600 font-extrabold bg-green-50 px-5 py-2 rounded-full border border-green-200">
+                          命中：{selectedRecord.hitCount} 發
+                        </h4>
+                        <h4 className="text-lg text-slate-600 font-extrabold bg-slate-100 px-5 py-2 rounded-full border border-slate-200">
+                          總計：{selectedRecord.firedCount} 發
+                        </h4>
+                      </div>
+
+                      <div className="flex flex-col md:flex-row items-center gap-10 w-full justify-center">
+                        {/* 🌟 實體圖片與百分比座標疊加 */}
+                        <div className="relative w-[300px] md:w-[350px] aspect-[2/3] bg-slate-100 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.1)] border border-slate-200 overflow-hidden">
+                          <img 
+                            src="/Gemini_Generated_Image_k63u9ck63u9ck63u.png" 
+                            alt="人型靶" 
+                            className="w-full h-full object-fill pointer-events-none" 
+                          />
+                          
+                          {/* 動態渲染彈孔 */}
+                          {selectedRecord.hitPositions && selectedRecord.hitPositions.map((pos, i) => (
+                             <motion.div
+                               key={i}
+                               initial={{ scale: 0 }} 
+                               animate={{ scale: 1 }} 
+                               transition={{ delay: 0.3 + (i * 0.1), type: "spring" }}
+                               className="absolute w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-md transform -translate-x-1/2 translate-y-1/2"
+                               style={{
+                                 // X 軸轉換：Unity 的 -0.5 等於 CSS 的 0%，0.5 等於 100%
+                                 left: `${(pos.x + 0.5) * 100}%`,
+                                 // Y 軸轉換：Unity 的 Y 向上為正，CSS 的 bottom 往上為 100%
+                                 bottom: `${(pos.y + 0.5) * 100}%`
+                               }}
+                             />
+                          ))}
+                        </div>
+
+                        {/* 右側詳細資料 */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 min-w-[220px] shadow-sm">
+                           <h5 className="text-slate-600 font-bold mb-4 border-b border-slate-200 pb-2">測驗統計</h5>
+                           <div className="space-y-4 text-lg">
+                             <div className="flex justify-between items-center">
+                               <span className="text-slate-500 font-medium">命中</span>
+                               <span className="font-extrabold text-green-600">{selectedRecord.hitCount}</span>
+                             </div>
+                             <div className="flex justify-between items-center">
+                               <span className="text-slate-500 font-medium">脫靶</span>
+                               <span className="font-extrabold text-red-500">{selectedRecord.firedCount - selectedRecord.hitCount}</span>
+                             </div>
+                             <div className="flex justify-between items-center pt-3 border-t border-slate-200">
+                               <span className="text-slate-500 font-medium">命中率</span>
+                               <span className="font-extrabold text-blue-600">
+                                 {((selectedRecord.hitCount / selectedRecord.firedCount) * 100).toFixed(1)}%
+                               </span>
+                             </div>
+                           </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </GlassCard>
               </motion.div>
             )}
@@ -283,7 +420,7 @@ function StudentHistoryView({ authCode }) {
 }
 
 // ============================================================================
-// 🌟 模式二：管理員後台 (明亮版)
+// 🌟 模式二：管理員後台 (明亮版) - 保持不變
 // ============================================================================
 function AdminApp() {
   const [adminUser, setAdminUser] = useState(null);
