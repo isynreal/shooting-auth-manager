@@ -106,6 +106,7 @@ function StudentHistoryView({ authCode }) {
   // 日期過濾狀態
   const [filterDate, setFilterDate] = useState('');
   const [hasSetInitDate, setHasSetInitDate] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // ★ 隱藏工程模式開關狀態
   const [isEngButtonVisible, setIsEngButtonVisible] = useState(false);
@@ -188,14 +189,29 @@ function StudentHistoryView({ authCode }) {
 
   const activeRecords = activeMode === 'Mode1' ? mode1Records : mode4Records;
 
-  const displayedRecords = useMemo(() => {
-    if (!filterDate) return activeRecords; 
-    return activeRecords.filter(rec => {
-       if (!rec.detail || !rec.detail.timestamp) return false;
-       const recDate = rec.detail.timestamp.split(' ')[0].replace(/\//g, '-');
-       return recDate === filterDate;
-    });
-  }, [activeRecords, filterDate]);
+const displayedRecords = useMemo(() => {
+    let filtered = activeRecords;
+
+    // 1. 日期過濾
+    if (filterDate) {
+      filtered = filtered.filter(rec => {
+        if (!rec.detail || !rec.detail.timestamp) return false;
+        const recDate = rec.detail.timestamp.split(' ')[0].replace(/\//g, '-');
+        return recDate === filterDate;
+      });
+    }
+
+    // 2. ★ 新增：學員名稱/編號搜尋過濾
+    if (searchTerm.trim() !== '') {
+      const lowerTerm = searchTerm.toLowerCase();
+      filtered = filtered.filter(rec => {
+        if (!rec.detail || !rec.detail.studentName) return false;
+        return rec.detail.studentName.toLowerCase().includes(lowerTerm);
+      });
+    }
+
+    return filtered;
+  }, [activeRecords, filterDate, searchTerm]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -247,9 +263,30 @@ function StudentHistoryView({ authCode }) {
           </div>
         )}
 
-        {/* 日曆過濾按鈕區塊 */}
+{/* 🌟 搜尋與日曆過濾按鈕區塊 */}
         {!loading && activeRecords.length > 0 && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm max-w-2xl mx-auto">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm max-w-4xl mx-auto">
+             
+             {/* ★ 新增：搜尋學員編號/名稱的輸入框 */}
+             <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={searchTerm} 
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="搜尋學員編號/名稱..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-10 pr-4 text-slate-800 focus:outline-none focus:border-blue-500 transition-colors"
+                />
+                {searchTerm && (
+                  <button onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+             </div>
+
+             <div className="hidden sm:block w-px h-8 bg-slate-200"></div>
+
+             {/* 原本的檢視日期 */}
              <div className="flex items-center gap-3 w-full sm:w-auto justify-center">
                 <Calendar className="w-5 h-5 text-blue-600" />
                 <span className="font-bold text-slate-700 whitespace-nowrap">檢視日期：</span>
@@ -260,12 +297,14 @@ function StudentHistoryView({ authCode }) {
                   className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
                 />
              </div>
-             {filterDate && (
+
+             {/* 清除過濾按鈕 (當有日期或搜尋字詞時顯示) */}
+             {(filterDate || searchTerm) && (
                <button 
-                 onClick={() => setFilterDate('')} 
-                 className="text-sm text-slate-500 hover:text-red-500 flex items-center gap-1 font-bold transition-colors bg-slate-100 hover:bg-red-50 px-3 py-2 rounded-lg"
+                 onClick={() => { setFilterDate(''); setSearchTerm(''); }} 
+                 className="text-sm text-slate-500 hover:text-red-500 flex items-center gap-1 font-bold transition-colors bg-slate-100 hover:bg-red-50 px-3 py-2 rounded-lg whitespace-nowrap"
                >
-                 <X className="w-4 h-4" /> 顯示所有紀錄
+                 <X className="w-4 h-4" /> 清除條件
                </button>
              )}
           </motion.div>
