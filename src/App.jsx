@@ -108,14 +108,15 @@ function StudentHistoryView({ authCode }) {
   const [hasSetInitDate, setHasSetInitDate] = useState(false);
 
   // ★ 模式 4 工程模式狀態
-  const [showEngMode, setShowEngMode] = useState(false);
+const [showEngMode, setShowEngMode] = useState(false);
   const [engConfig, setEngConfig] = useState(() => {
     const saved = localStorage.getItem('mode4EngConfig');
-    return saved ? JSON.parse(saved) : { width: 280, offsetX: 0, offsetY: 0, dotSize: 16 };
+    // ★ 新增：spreadX 與 spreadY 預設為 1.0
+    return saved ? JSON.parse(saved) : { width: 280, offsetX: 0, offsetY: 0, dotSize: 16, spreadX: 1.0, spreadY: 1.0 };
   });
 
   // 當設定改變時，自動存入 localStorage
-  useEffect(() => {
+useEffect(() => {
     localStorage.setItem('mode4EngConfig', JSON.stringify(engConfig));
   }, [engConfig]);
 
@@ -371,19 +372,43 @@ function StudentHistoryView({ authCode }) {
                       </div>
 
                       {/* ★ 工程模式設定面板 */}
+{/* ★ 工程模式設定面板 */}
                       <AnimatePresence>
                         {showEngMode && (
-                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="w-full max-w-md overflow-hidden mb-6">
+                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="w-full max-w-md overflow-hidden mb-6 z-50 relative">
                             <div className="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 text-white space-y-4">
                               <h5 className="font-bold text-slate-200 border-b border-slate-600 pb-2 flex justify-between">
                                 <span>🛠️ 靶紙視覺校正工具</span>
-                                <button onClick={() => setEngConfig({ width: 280, offsetX: 0, offsetY: 0, dotSize: 16 })} className="text-xs text-blue-400 hover:text-blue-300">重置預設</button>
+                                <button onClick={() => setEngConfig({ width: 280, offsetX: 0, offsetY: 0, dotSize: 16, spreadX: 1.0, spreadY: 1.0 })} className="text-xs text-blue-400 hover:text-blue-300">重置預設</button>
                               </h5>
-                              <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-300 flex justify-between">靶紙寬度大小 ({engConfig.width}px)<input type="range" min="150" max="500" value={engConfig.width} onChange={(e)=>setEngConfig({...engConfig, width: Number(e.target.value)})} className="w-1/2" /></label>
-                                <label className="text-xs font-bold text-slate-300 flex justify-between">中心點 X 偏移 ({engConfig.offsetX}%)<input type="range" min="-50" max="50" step="0.5" value={engConfig.offsetX} onChange={(e)=>setEngConfig({...engConfig, offsetX: Number(e.target.value)})} className="w-1/2" /></label>
-                                <label className="text-xs font-bold text-slate-300 flex justify-between">中心點 Y 偏移 ({engConfig.offsetY}%)<input type="range" min="-50" max="50" step="0.5" value={engConfig.offsetY} onChange={(e)=>setEngConfig({...engConfig, offsetY: Number(e.target.value)})} className="w-1/2" /></label>
-                                <label className="text-xs font-bold text-slate-300 flex justify-between">彈孔顯示大小 ({engConfig.dotSize}px)<input type="range" min="8" max="30" value={engConfig.dotSize} onChange={(e)=>setEngConfig({...engConfig, dotSize: Number(e.target.value)})} className="w-1/2" /></label>
+                              <div className="space-y-3">
+                                <label className="text-xs font-bold text-slate-300 flex justify-between items-center">
+                                  <span>靶紙顯示寬度 ({engConfig.width}px)</span>
+                                  <input type="range" min="150" max="500" value={engConfig.width} onChange={(e)=>setEngConfig({...engConfig, width: Number(e.target.value)})} className="w-1/2" />
+                                </label>
+                                <label className="text-xs font-bold text-slate-300 flex justify-between items-center">
+                                  <span>中心點 X 偏移 ({engConfig.offsetX}%)</span>
+                                  <input type="range" min="-50" max="50" step="0.5" value={engConfig.offsetX} onChange={(e)=>setEngConfig({...engConfig, offsetX: Number(e.target.value)})} className="w-1/2" />
+                                </label>
+                                <label className="text-xs font-bold text-slate-300 flex justify-between items-center">
+                                  <span>中心點 Y 偏移 ({engConfig.offsetY}%)</span>
+                                  <input type="range" min="-50" max="50" step="0.5" value={engConfig.offsetY} onChange={(e)=>setEngConfig({...engConfig, offsetY: Number(e.target.value)})} className="w-1/2" />
+                                </label>
+                                {/* ★ 新增：X 軸與 Y 軸獨立擴散倍率 */}
+                                <div className="border-t border-slate-600 pt-3 mt-1 space-y-3">
+                                  <label className="text-xs font-bold text-yellow-300 flex justify-between items-center">
+                                    <span>↔️ 左右擴散倍率 ({engConfig.spreadX || 1}x)</span>
+                                    <input type="range" min="0.5" max="3" step="0.05" value={engConfig.spreadX || 1} onChange={(e)=>setEngConfig({...engConfig, spreadX: Number(e.target.value)})} className="w-1/2 accent-yellow-400" />
+                                  </label>
+                                  <label className="text-xs font-bold text-yellow-300 flex justify-between items-center">
+                                    <span>↕️ 上下擴散倍率 ({engConfig.spreadY || 1}x)</span>
+                                    <input type="range" min="0.5" max="3" step="0.05" value={engConfig.spreadY || 1} onChange={(e)=>setEngConfig({...engConfig, spreadY: Number(e.target.value)})} className="w-1/2 accent-yellow-400" />
+                                  </label>
+                                </div>
+                                <label className="text-xs font-bold text-slate-300 flex justify-between items-center pt-2 border-t border-slate-600">
+                                  <span>彈孔顯示大小 ({engConfig.dotSize}px)</span>
+                                  <input type="range" min="8" max="30" value={engConfig.dotSize} onChange={(e)=>setEngConfig({...engConfig, dotSize: Number(e.target.value)})} className="w-1/2" />
+                                </label>
                               </div>
                             </div>
                           </motion.div>
@@ -393,11 +418,9 @@ function StudentHistoryView({ authCode }) {
                       <div className="flex flex-col md:flex-row items-center gap-10 w-full justify-center">
                         {/* 🌟 實體圖片與百分比座標疊加 (套用工程模式參數) */}
                         <div 
-                           className="relative bg-slate-100 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.1)] border border-slate-200 overflow-hidden"
-                           // ★ 動態套用靶紙大小
+                           className="relative bg-slate-100 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.1)] border border-slate-200 overflow-hidden shrink-0"
                            style={{ width: `${engConfig.width}px`, aspectRatio: '2/3' }}
                         >
-                          {/* 如果開啟工程模式，顯示紅色的十字基準線方便對位 */}
                           {showEngMode && (
                              <>
                                <div className="absolute left-0 right-0 h-[1px] bg-red-500/50 pointer-events-none z-0" style={{ bottom: `calc(50% + ${engConfig.offsetY}%)` }}></div>
@@ -413,20 +436,25 @@ function StudentHistoryView({ authCode }) {
                           />
                           
                           {/* 動態渲染彈孔 */}
-                          {selectedRecord.hitPositions && selectedRecord.hitPositions.map((pos, i) => (
-                             <motion.div
-                               key={i}
-                               initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3 + (i * 0.1), type: "spring" }}
-                               className="absolute bg-red-500 rounded-full border-2 border-white shadow-md transform -translate-x-1/2 translate-y-1/2 z-20"
-                               style={{
-                                 // ★ 套用彈孔大小
-                                 width: `${engConfig.dotSize}px`, height: `${engConfig.dotSize}px`,
-                                 // ★ 核心算法：50% + 工程偏移量 + (命中比例 * 100%)
-                                 left: `calc(50% + ${engConfig.offsetX}% + ${pos.x * 100}%)`,
-                                 bottom: `calc(50% + ${engConfig.offsetY}% + ${pos.y * 100}%)`
-                               }}
-                             />
-                          ))}
+                          {selectedRecord.hitPositions && selectedRecord.hitPositions.map((pos, i) => {
+                             // ★ 讀取設定的倍率，防止 undefined 導致 NaN 破圖
+                             const sX = engConfig.spreadX || 1.0;
+                             const sY = engConfig.spreadY || 1.0;
+
+                             return (
+                               <motion.div
+                                 key={i}
+                                 initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3 + (i * 0.1), type: "spring" }}
+                                 className="absolute bg-red-500 rounded-full border-2 border-white shadow-md transform -translate-x-1/2 translate-y-1/2 z-20"
+                                 style={{
+                                   width: `${engConfig.dotSize}px`, height: `${engConfig.dotSize}px`,
+                                   // ★ 乘上擴散倍率！
+                                   left: `calc(50% + ${engConfig.offsetX}% + ${pos.x * sX * 100}%)`,
+                                   bottom: `calc(50% + ${engConfig.offsetY}% + ${pos.y * sY * 100}%)`
+                                 }}
+                               />
+                             );
+                          })}
                         </div>
 
                         {/* 右側詳細資料 */}
