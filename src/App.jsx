@@ -388,21 +388,21 @@ useEffect(() => {
                                 </label>
                                 <label className="text-xs font-bold text-slate-300 flex justify-between items-center">
                                   <span>中心點 X 偏移 ({engConfig.offsetX}%)</span>
-                                  <input type="range" min="-50" max="50" step="0.5" value={engConfig.offsetX} onChange={(e)=>setEngConfig({...engConfig, offsetX: Number(e.target.value)})} className="w-1/2" />
+                                  <input type="range" min="-100" max="100" step="0.5" value={engConfig.offsetX} onChange={(e)=>setEngConfig({...engConfig, offsetX: Number(e.target.value)})} className="w-1/2" />
                                 </label>
                                 <label className="text-xs font-bold text-slate-300 flex justify-between items-center">
                                   <span>中心點 Y 偏移 ({engConfig.offsetY}%)</span>
-                                  <input type="range" min="-50" max="50" step="0.5" value={engConfig.offsetY} onChange={(e)=>setEngConfig({...engConfig, offsetY: Number(e.target.value)})} className="w-1/2" />
+                                  <input type="range" min="-100" max="100" step="0.5" value={engConfig.offsetY} onChange={(e)=>setEngConfig({...engConfig, offsetY: Number(e.target.value)})} className="w-1/2" />
                                 </label>
                                 {/* ★ 新增：X 軸與 Y 軸獨立擴散倍率 */}
                                 <div className="border-t border-slate-600 pt-3 mt-1 space-y-3">
                                   <label className="text-xs font-bold text-yellow-300 flex justify-between items-center">
                                     <span>↔️ 左右擴散倍率 ({engConfig.spreadX || 1}x)</span>
-                                    <input type="range" min="0.5" max="3" step="0.05" value={engConfig.spreadX || 1} onChange={(e)=>setEngConfig({...engConfig, spreadX: Number(e.target.value)})} className="w-1/2 accent-yellow-400" />
+                                    <input type="range" min="0.5" max="10" step="0.05" value={engConfig.spreadX || 1} onChange={(e)=>setEngConfig({...engConfig, spreadX: Number(e.target.value)})} className="w-1/2 accent-yellow-400" />
                                   </label>
                                   <label className="text-xs font-bold text-yellow-300 flex justify-between items-center">
                                     <span>↕️ 上下擴散倍率 ({engConfig.spreadY || 1}x)</span>
-                                    <input type="range" min="0.5" max="3" step="0.05" value={engConfig.spreadY || 1} onChange={(e)=>setEngConfig({...engConfig, spreadY: Number(e.target.value)})} className="w-1/2 accent-yellow-400" />
+                                    <input type="range" min="0.5" max="10" step="0.05" value={engConfig.spreadY || 1} onChange={(e)=>setEngConfig({...engConfig, spreadY: Number(e.target.value)})} className="w-1/2 accent-yellow-400" />
                                   </label>
                                 </div>
                                 <label className="text-xs font-bold text-slate-300 flex justify-between items-center pt-2 border-t border-slate-600">
