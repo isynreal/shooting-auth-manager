@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, query, getDocs, 
@@ -98,7 +98,7 @@ export default function App() {
 function StudentHistoryView({ authCode }) {
   const [mode1Records, setMode1Records] = useState([]);
   const [mode4Records, setMode4Records] = useState([]);
-  const [activeMode, setActiveMode] = useState('Mode1'); // 'Mode1' 或 'Mode4'
+  const [activeMode, setActiveMode] = useState('Mode1'); 
   
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -107,16 +107,30 @@ function StudentHistoryView({ authCode }) {
   const [filterDate, setFilterDate] = useState('');
   const [hasSetInitDate, setHasSetInitDate] = useState(false);
 
-  // ★ 模式 4 工程模式狀態
-const [showEngMode, setShowEngMode] = useState(false);
+  // ★ 隱藏工程模式開關狀態
+  const [isEngButtonVisible, setIsEngButtonVisible] = useState(false);
+  const pressTimer = useRef(null);
+
+  // 長按 5 秒觸發解鎖
+  const handlePressStart = () => {
+    pressTimer.current = setTimeout(() => {
+      setIsEngButtonVisible(true);
+    }, 5000);
+  };
+  const handlePressEnd = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+  };
+
+  // ★ 模式 4 工程模式設定 (帶入完美參數為預設值)
+  const [showEngMode, setShowEngMode] = useState(false);
+  const defaultEngConfig = { width: 268, offsetX: -2.5, offsetY: -15, dotSize: 20, spreadX: 3.65, spreadY: 2.2 };
+  
   const [engConfig, setEngConfig] = useState(() => {
     const saved = localStorage.getItem('mode4EngConfig');
-    // ★ 新增：spreadX 與 spreadY 預設為 1.0
-    return saved ? JSON.parse(saved) : { width: 280, offsetX: 0, offsetY: 0, dotSize: 16, spreadX: 1.0, spreadY: 1.0 };
+    return saved ? JSON.parse(saved) : defaultEngConfig;
   });
 
-  // 當設定改變時，自動存入 localStorage
-useEffect(() => {
+  useEffect(() => {
     localStorage.setItem('mode4EngConfig', JSON.stringify(engConfig));
   }, [engConfig]);
 
@@ -132,10 +146,8 @@ useEffect(() => {
         if (!raw.payload) return;
         try {
           const parsed = JSON.parse(raw.payload);
-          // 判斷是否為 Mode 4 的資料
           if (parsed.mode === 'Mode4') {
             if (parsed.players && Array.isArray(parsed.players)) {
-              // 🌟 解包扁平化：把一局 4 個人拆開，並過濾掉沒開槍的靶位
               parsed.players.forEach((p, idx) => {
                 if (p.firedCount > 0) {
                   m4.push({
@@ -147,7 +159,6 @@ useEffect(() => {
               });
             }
           } else {
-            // 原本的 Mode 1 資料
             m1.push({ id: doc.id, docId: doc.id, detail: parsed });
           }
         } catch(e) {
@@ -158,7 +169,6 @@ useEffect(() => {
       setMode1Records(m1);
       setMode4Records(m4);
 
-      // 自動抓取最新的一天並設為預設過濾日期
       if (!hasSetInitDate) {
          const latestM1 = m1[0]?.detail?.timestamp;
          const latestM4 = m4[0]?.detail?.timestamp;
@@ -176,10 +186,8 @@ useEffect(() => {
     return () => unsub();
   }, [authCode, hasSetInitDate]);
 
-  // 取得當下頁籤的資料集
   const activeRecords = activeMode === 'Mode1' ? mode1Records : mode4Records;
 
-  // 根據選擇的日期進行過濾
   const displayedRecords = useMemo(() => {
     if (!filterDate) return activeRecords; 
     return activeRecords.filter(rec => {
@@ -189,7 +197,6 @@ useEffect(() => {
     });
   }, [activeRecords, filterDate]);
 
-  // 當過濾結果或頁籤改變時，自動選擇第一筆
   useEffect(() => {
     setSelectedIndex(0);
   }, [displayedRecords, activeMode]);
@@ -200,13 +207,27 @@ useEffect(() => {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="min-h-screen text-slate-800 font-sans relative bg-slate-50 selection:bg-blue-200">
       
       <div className="relative z-10 max-w-6xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
-        <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-center mb-6">
-          <img src="/logo.png" alt="iSynReal Logo" className="h-14 md:h-16 mx-auto object-contain mb-4" />
+        <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-center mb-6 relative">
+          
+          {/* 🌟 公司 Logo (綁定 5 秒長按解鎖工程模式，且設定游標為預設、不可拖曳) */}
+          <img 
+            src="/logo.png" 
+            alt="iSynReal Logo" 
+            draggable="false"
+            className="h-14 md:h-16 mx-auto object-contain mb-4 select-none cursor-default" 
+            onMouseDown={handlePressStart}
+            onMouseUp={handlePressEnd}
+            onMouseLeave={handlePressEnd}
+            onTouchStart={handlePressStart}
+            onTouchEnd={handlePressEnd}
+            style={{ WebkitTouchCallout: 'none' }} 
+          />
+
           <h2 className="text-3xl font-extrabold text-slate-800 mb-2">戰術打靶紀錄查詢</h2>
           <p className="text-blue-600 font-bold tracking-wide">當前授權碼：{authCode}</p>
         </motion.div>
 
-        {/* 🌟 雙模式切換頁籤 */}
+        {/* 雙模式切換頁籤 */}
         {!loading && (mode1Records.length > 0 || mode4Records.length > 0) && (
           <div className="flex justify-center mb-8">
             <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-sm inline-flex">
@@ -279,7 +300,6 @@ useEffect(() => {
                         <div className="text-xs text-slate-500 font-mono">{rec.detail.timestamp}</div>
                       </div>
                       
-                      {/* 依據不同模式顯示對應的列表縮圖資訊 */}
                       <div className="text-sm text-slate-600 flex justify-between items-center mt-2">
                         {activeMode === 'Mode1' ? (
                           <>
@@ -302,7 +322,7 @@ useEffect(() => {
             {/* 右側：詳細射擊報告 */}
             {selectedRecord && (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={`${selectedRecord.timestamp}-${selectedRecord.studentName}`} className="flex-1">
-                <GlassCard className="p-6 md:p-10 flex flex-col items-center h-full">
+                <GlassCard className="p-6 md:p-10 flex flex-col items-center h-full relative">
                   <h3 className="text-2xl font-bold text-slate-800 mb-2">{selectedRecord.studentName} 的射擊報告</h3>
                   <p className="text-slate-500 text-sm mb-6 font-mono tracking-wider bg-slate-100 px-3 py-1 rounded-full">{selectedRecord.timestamp}</p>
                   
@@ -362,24 +382,29 @@ useEffect(() => {
                           總計：{selectedRecord.firedCount} 發
                         </h4>
                         
-                        {/* ★ 工程模式開關 */}
-                        <button 
-                          onClick={() => setShowEngMode(!showEngMode)}
-                          className={`absolute right-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all border ${showEngMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
-                        >
-                          ⚙️ 工程模式
-                        </button>
+                        {/* ★ 隱藏的工程模式開關 (長按 5 秒 Logo 後才會出現) */}
+                        <AnimatePresence>
+                          {isEngButtonVisible && (
+                            <motion.button 
+                              initial={{ opacity: 0, scale: 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              onClick={() => setShowEngMode(!showEngMode)}
+                              className={`absolute right-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all border ${showEngMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
+                            >
+                              ⚙️ 工程模式
+                            </motion.button>
+                          )}
+                        </AnimatePresence>
                       </div>
 
-                      {/* ★ 工程模式設定面板 */}
-{/* ★ 工程模式設定面板 */}
+                      {/* 工程模式設定面板 */}
                       <AnimatePresence>
                         {showEngMode && (
                           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="w-full max-w-md overflow-hidden mb-6 z-50 relative">
                             <div className="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 text-white space-y-4">
                               <h5 className="font-bold text-slate-200 border-b border-slate-600 pb-2 flex justify-between">
                                 <span>🛠️ 靶紙視覺校正工具</span>
-                                <button onClick={() => setEngConfig({ width: 280, offsetX: 0, offsetY: 0, dotSize: 16, spreadX: 1.0, spreadY: 1.0 })} className="text-xs text-blue-400 hover:text-blue-300">重置預設</button>
+                                <button onClick={() => setEngConfig(defaultEngConfig)} className="text-xs text-blue-400 hover:text-blue-300">重置預設</button>
                               </h5>
                               <div className="space-y-3">
                                 <label className="text-xs font-bold text-slate-300 flex justify-between items-center">
@@ -388,20 +413,21 @@ useEffect(() => {
                                 </label>
                                 <label className="text-xs font-bold text-slate-300 flex justify-between items-center">
                                   <span>中心點 X 偏移 ({engConfig.offsetX}%)</span>
-                                  <input type="range" min="-100" max="100" step="0.5" value={engConfig.offsetX} onChange={(e)=>setEngConfig({...engConfig, offsetX: Number(e.target.value)})} className="w-1/2" />
+                                  <input type="range" min="-50" max="50" step="0.5" value={engConfig.offsetX} onChange={(e)=>setEngConfig({...engConfig, offsetX: Number(e.target.value)})} className="w-1/2" />
                                 </label>
                                 <label className="text-xs font-bold text-slate-300 flex justify-between items-center">
                                   <span>中心點 Y 偏移 ({engConfig.offsetY}%)</span>
-                                  <input type="range" min="-100" max="100" step="0.5" value={engConfig.offsetY} onChange={(e)=>setEngConfig({...engConfig, offsetY: Number(e.target.value)})} className="w-1/2" />
+                                  <input type="range" min="-50" max="50" step="0.5" value={engConfig.offsetY} onChange={(e)=>setEngConfig({...engConfig, offsetY: Number(e.target.value)})} className="w-1/2" />
                                 </label>
-                                {/* ★ 新增：X 軸與 Y 軸獨立擴散倍率 */}
                                 <div className="border-t border-slate-600 pt-3 mt-1 space-y-3">
                                   <label className="text-xs font-bold text-yellow-300 flex justify-between items-center">
                                     <span>↔️ 左右擴散倍率 ({engConfig.spreadX || 1}x)</span>
+                                    {/* ★ 上限調大到 10 */}
                                     <input type="range" min="0.5" max="10" step="0.05" value={engConfig.spreadX || 1} onChange={(e)=>setEngConfig({...engConfig, spreadX: Number(e.target.value)})} className="w-1/2 accent-yellow-400" />
                                   </label>
                                   <label className="text-xs font-bold text-yellow-300 flex justify-between items-center">
                                     <span>↕️ 上下擴散倍率 ({engConfig.spreadY || 1}x)</span>
+                                    {/* ★ 上限調大到 10 */}
                                     <input type="range" min="0.5" max="10" step="0.05" value={engConfig.spreadY || 1} onChange={(e)=>setEngConfig({...engConfig, spreadY: Number(e.target.value)})} className="w-1/2 accent-yellow-400" />
                                   </label>
                                 </div>
@@ -437,7 +463,6 @@ useEffect(() => {
                           
                           {/* 動態渲染彈孔 */}
                           {selectedRecord.hitPositions && selectedRecord.hitPositions.map((pos, i) => {
-                             // ★ 讀取設定的倍率，防止 undefined 導致 NaN 破圖
                              const sX = engConfig.spreadX || 1.0;
                              const sY = engConfig.spreadY || 1.0;
 
@@ -448,7 +473,6 @@ useEffect(() => {
                                  className="absolute bg-red-500 rounded-full border-2 border-white shadow-md transform -translate-x-1/2 translate-y-1/2 z-20"
                                  style={{
                                    width: `${engConfig.dotSize}px`, height: `${engConfig.dotSize}px`,
-                                   // ★ 乘上擴散倍率！
                                    left: `calc(50% + ${engConfig.offsetX}% + ${pos.x * sX * 100}%)`,
                                    bottom: `calc(50% + ${engConfig.offsetY}% + ${pos.y * sY * 100}%)`
                                  }}
