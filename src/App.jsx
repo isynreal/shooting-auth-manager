@@ -123,7 +123,7 @@ function StudentHistoryView({ authCode }) {
   // ★ 模式 1、3、4 各自獨立的工程模式設定
   const [showEngMode, setShowEngMode] = useState(false);
   
-  const defaultMode1EngConfig = { width: 350, offsetX: 0, offsetY: 0, dotSize: 12, spreadX: 1, spreadY: 1 };
+  const defaultMode1EngConfig = { width: 350, offsetX: 0, offsetY: 0, dotSize: 12, spreadX: 1.65, spreadY: 1.65 };
   const defaultMode3EngConfig = { width: 268, offsetX: -1.5, offsetY: -8.5, dotSize: 14, spreadX: 2.95, spreadY: 2.45 };
   const defaultMode4EngConfig = { width: 268, offsetX: -2.5, offsetY: -15, dotSize: 20, spreadX: 3.65, spreadY: 2.2 };
   
