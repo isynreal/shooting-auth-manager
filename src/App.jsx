@@ -10,7 +10,7 @@ import {
   Check, Trash2, User, Lock, LogOut, Edit3,
   Search, Calendar, X, ChevronLeft, ChevronRight, Loader2, Target,
   QrCode, Link as LinkIcon, BarChart3, ChevronDown, ChevronUp, Filter,
-  MousePointerClick, Sparkles, Users
+  MousePointerClick, Sparkles, Users, Crosshair
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -93,17 +93,18 @@ export default function App() {
 }
 
 // ============================================================================
-// 🌟 模式一與模式四：學員歷史成績視角 (雙模式解包切換)
+// 🌟 學員歷史成績視角 (三模式解包切換)
 // ============================================================================
 function StudentHistoryView({ authCode }) {
   const [mode1Records, setMode1Records] = useState([]);
+  const [mode3Records, setMode3Records] = useState([]);
   const [mode4Records, setMode4Records] = useState([]);
   const [activeMode, setActiveMode] = useState('Mode1'); 
   
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   
-  // 日期過濾狀態
+  // 日期與搜尋過濾狀態
   const [filterDate, setFilterDate] = useState('');
   const [hasSetInitDate, setHasSetInitDate] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -112,7 +113,6 @@ function StudentHistoryView({ authCode }) {
   const [isEngButtonVisible, setIsEngButtonVisible] = useState(false);
   const pressTimer = useRef(null);
 
-  // 長按 5 秒觸發解鎖
   const handlePressStart = () => {
     pressTimer.current = setTimeout(() => {
       setIsEngButtonVisible(true);
@@ -122,24 +122,36 @@ function StudentHistoryView({ authCode }) {
     if (pressTimer.current) clearTimeout(pressTimer.current);
   };
 
-  // ★ 模式 4 工程模式設定 (帶入完美參數為預設值)
+  // ★ 模式 3 與 模式 4 各自獨立的工程模式設定
   const [showEngMode, setShowEngMode] = useState(false);
-  const defaultEngConfig = { width: 268, offsetX: -2.5, offsetY: -15, dotSize: 20, spreadX: 3.65, spreadY: 2.2 };
   
-  const [engConfig, setEngConfig] = useState(() => {
+  const defaultMode4EngConfig = { width: 268, offsetX: -2.5, offsetY: -15, dotSize: 20, spreadX: 3.65, spreadY: 2.2 };
+  const defaultMode3EngConfig = { width: 268, offsetX: 0, offsetY: 0, dotSize: 16, spreadX: 1, spreadY: 1 };
+  
+  const [engConfigM4, setEngConfigM4] = useState(() => {
     const saved = localStorage.getItem('mode4EngConfig');
-    return saved ? JSON.parse(saved) : defaultEngConfig;
+    return saved ? JSON.parse(saved) : defaultMode4EngConfig;
   });
 
-  useEffect(() => {
-    localStorage.setItem('mode4EngConfig', JSON.stringify(engConfig));
-  }, [engConfig]);
+  const [engConfigM3, setEngConfigM3] = useState(() => {
+    const saved = localStorage.getItem('mode3EngConfig');
+    return saved ? JSON.parse(saved) : defaultMode3EngConfig;
+  });
+
+  useEffect(() => { localStorage.setItem('mode4EngConfig', JSON.stringify(engConfigM4)); }, [engConfigM4]);
+  useEffect(() => { localStorage.setItem('mode3EngConfig', JSON.stringify(engConfigM3)); }, [engConfigM3]);
+
+  // 動態指向當前模式的工程設定
+  const activeEngConfig = activeMode === 'Mode3' ? engConfigM3 : engConfigM4;
+  const setActiveEngConfig = activeMode === 'Mode3' ? setEngConfigM3 : setEngConfigM4;
+  const activeDefaultEng = activeMode === 'Mode3' ? defaultMode3EngConfig : defaultMode4EngConfig;
 
   useEffect(() => {
     setLoading(true);
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', HISTORIES_COLLECTION), where('code', '==', authCode), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, (snapshot) => {
       const m1 = [];
+      const m3 = [];
       const m4 = [];
 
       snapshot.docs.forEach(doc => {
@@ -150,12 +162,16 @@ function StudentHistoryView({ authCode }) {
           if (parsed.mode === 'Mode4') {
             if (parsed.players && Array.isArray(parsed.players)) {
               parsed.players.forEach((p, idx) => {
-                if (p.firedCount > 0) {
-                  m4.push({
-                    id: `${doc.id}-${idx}`, 
-                    docId: doc.id,
-                    detail: { ...p, timestamp: parsed.timestamp, mode: 'Mode4' }
-                  });
+                if (p.firedCount > 0 || (p.hitPositions && p.hitPositions.length > 0)) {
+                  m4.push({ id: `${doc.id}-${idx}`, docId: doc.id, detail: { ...p, timestamp: parsed.timestamp, mode: 'Mode4' } });
+                }
+              });
+            }
+          } else if (parsed.mode === 'Mode3') {
+            if (parsed.players && Array.isArray(parsed.players)) {
+              parsed.players.forEach((p, idx) => {
+                if (p.hitPositions && p.hitPositions.length > 0) {
+                  m3.push({ id: `${doc.id}-${idx}`, docId: doc.id, detail: { ...p, timestamp: parsed.timestamp, mode: 'Mode3' } });
                 }
               });
             }
@@ -168,13 +184,15 @@ function StudentHistoryView({ authCode }) {
       });
       
       setMode1Records(m1);
+      setMode3Records(m3);
       setMode4Records(m4);
 
       if (!hasSetInitDate) {
-         const latestM1 = m1[0]?.detail?.timestamp;
+         let latest = m1[0]?.detail?.timestamp;
+         const latestM3 = m3[0]?.detail?.timestamp;
          const latestM4 = m4[0]?.detail?.timestamp;
-         let latest = latestM1;
-         if (latestM4 && (!latestM1 || latestM4 > latestM1)) latest = latestM4;
+         if (latestM3 && (!latest || latestM3 > latest)) latest = latestM3;
+         if (latestM4 && (!latest || latestM4 > latest)) latest = latestM4;
 
          if (latest) {
             const datePart = latest.split(' ')[0].replace(/\//g, '-'); 
@@ -187,12 +205,10 @@ function StudentHistoryView({ authCode }) {
     return () => unsub();
   }, [authCode, hasSetInitDate]);
 
-  const activeRecords = activeMode === 'Mode1' ? mode1Records : mode4Records;
+  const activeRecords = activeMode === 'Mode1' ? mode1Records : activeMode === 'Mode3' ? mode3Records : mode4Records;
 
-const displayedRecords = useMemo(() => {
+  const displayedRecords = useMemo(() => {
     let filtered = activeRecords;
-
-    // 1. 日期過濾
     if (filterDate) {
       filtered = filtered.filter(rec => {
         if (!rec.detail || !rec.detail.timestamp) return false;
@@ -200,8 +216,6 @@ const displayedRecords = useMemo(() => {
         return recDate === filterDate;
       });
     }
-
-    // 2. ★ 新增：學員名稱/編號搜尋過濾
     if (searchTerm.trim() !== '') {
       const lowerTerm = searchTerm.toLowerCase();
       filtered = filtered.filter(rec => {
@@ -209,12 +223,12 @@ const displayedRecords = useMemo(() => {
         return rec.detail.studentName.toLowerCase().includes(lowerTerm);
       });
     }
-
     return filtered;
   }, [activeRecords, filterDate, searchTerm]);
 
   useEffect(() => {
     setSelectedIndex(0);
+    setShowEngMode(false); // 切換模式時自動收起工程面板
   }, [displayedRecords, activeMode]);
 
   const selectedRecord = displayedRecords[selectedIndex]?.detail;
@@ -225,33 +239,32 @@ const displayedRecords = useMemo(() => {
       <div className="relative z-10 max-w-6xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
         <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-center mb-6 relative">
           
-          {/* 🌟 公司 Logo (綁定 5 秒長按解鎖工程模式，且設定游標為預設、不可拖曳) */}
           <img 
-            src="/logo.png" 
-            alt="iSynReal Logo" 
-            draggable="false"
+            src="/logo.png" alt="iSynReal Logo" draggable="false"
             className="h-14 md:h-16 mx-auto object-contain mb-4 select-none cursor-default" 
-            onMouseDown={handlePressStart}
-            onMouseUp={handlePressEnd}
-            onMouseLeave={handlePressEnd}
-            onTouchStart={handlePressStart}
-            onTouchEnd={handlePressEnd}
-            style={{ WebkitTouchCallout: 'none' }} 
+            onMouseDown={handlePressStart} onMouseUp={handlePressEnd} onMouseLeave={handlePressEnd}
+            onTouchStart={handlePressStart} onTouchEnd={handlePressEnd} style={{ WebkitTouchCallout: 'none' }} 
           />
 
           <h2 className="text-3xl font-extrabold text-slate-800 mb-2">戰術打靶紀錄查詢</h2>
           <p className="text-blue-600 font-bold tracking-wide">當前授權碼：{authCode}</p>
         </motion.div>
 
-        {/* 雙模式切換頁籤 */}
-        {!loading && (mode1Records.length > 0 || mode4Records.length > 0) && (
+        {/* 🌟 三模式切換頁籤 */}
+        {!loading && (mode1Records.length > 0 || mode3Records.length > 0 || mode4Records.length > 0) && (
           <div className="flex justify-center mb-8">
-            <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-sm inline-flex">
+            <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-sm inline-flex flex-wrap justify-center">
               <button
                 onClick={() => setActiveMode('Mode1')}
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold transition-all ${activeMode === 'Mode1' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 <Target className="w-5 h-5" /> 靶紙射擊 (單人)
+              </button>
+              <button
+                onClick={() => setActiveMode('Mode3')}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold transition-all ${activeMode === 'Mode3' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Crosshair className="w-5 h-5" /> 歸零靶紙 (多人)
               </button>
               <button
                 onClick={() => setActiveMode('Mode4')}
@@ -263,47 +276,28 @@ const displayedRecords = useMemo(() => {
           </div>
         )}
 
-{/* 🌟 搜尋與日曆過濾按鈕區塊 */}
+        {/* 搜尋與日曆過濾按鈕區塊 */}
         {!loading && activeRecords.length > 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm max-w-4xl mx-auto">
-             
-             {/* ★ 新增：搜尋學員編號/名稱的輸入框 */}
              <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
                 <input 
-                  type="text" 
-                  value={searchTerm} 
-                  onChange={e => setSearchTerm(e.target.value)}
-                  placeholder="搜尋學員編號/名稱..."
+                  type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="搜尋學員編號/名稱..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-10 pr-4 text-slate-800 focus:outline-none focus:border-blue-500 transition-colors"
                 />
-                {searchTerm && (
-                  <button onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700">
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+                {searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700"><X className="w-4 h-4" /></button>}
              </div>
-
              <div className="hidden sm:block w-px h-8 bg-slate-200"></div>
-
-             {/* 原本的檢視日期 */}
              <div className="flex items-center gap-3 w-full sm:w-auto justify-center">
                 <Calendar className="w-5 h-5 text-blue-600" />
                 <span className="font-bold text-slate-700 whitespace-nowrap">檢視日期：</span>
                 <input 
-                  type="date" 
-                  value={filterDate} 
-                  onChange={e => setFilterDate(e.target.value)}
+                  type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
                   className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
                 />
              </div>
-
-             {/* 清除過濾按鈕 (當有日期或搜尋字詞時顯示) */}
              {(filterDate || searchTerm) && (
-               <button 
-                 onClick={() => { setFilterDate(''); setSearchTerm(''); }} 
-                 className="text-sm text-slate-500 hover:text-red-500 flex items-center gap-1 font-bold transition-colors bg-slate-100 hover:bg-red-50 px-3 py-2 rounded-lg whitespace-nowrap"
-               >
+               <button onClick={() => { setFilterDate(''); setSearchTerm(''); }} className="text-sm text-slate-500 hover:text-red-500 flex items-center gap-1 font-bold transition-colors bg-slate-100 hover:bg-red-50 px-3 py-2 rounded-lg whitespace-nowrap">
                  <X className="w-4 h-4" /> 清除條件
                </button>
              )}
@@ -345,6 +339,11 @@ const displayedRecords = useMemo(() => {
                             <span>總分：<span className={isSelected ? 'text-green-600 font-bold' : 'text-slate-800 font-bold'}>{rec.detail.scores.reduce((a, b) => a + b, 0)} 分</span></span>
                             <span className="font-medium bg-slate-100 px-2 py-0.5 rounded-md text-xs">{rec.detail.scores.length} 發</span>
                           </>
+                        ) : activeMode === 'Mode3' ? (
+                          <>
+                            <span>總分：<span className={isSelected ? 'text-blue-600 font-bold' : 'text-slate-800 font-bold'}>{rec.detail.totalScore} 分</span></span>
+                            <span className="font-medium bg-slate-100 px-2 py-0.5 rounded-md text-xs">{rec.detail.hitPositions?.length || 0} 發</span>
+                          </>
                         ) : (
                           <>
                             <span>命中：<span className={isSelected ? 'text-green-600 font-bold' : 'text-slate-800 font-bold'}>{rec.detail.hitCount} / {rec.detail.firedCount}</span></span>
@@ -361,13 +360,13 @@ const displayedRecords = useMemo(() => {
             {/* 右側：詳細射擊報告 */}
             {selectedRecord && (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={`${selectedRecord.timestamp}-${selectedRecord.studentName}`} className="flex-1">
-                <GlassCard className="p-6 md:p-10 flex flex-col items-center h-full relative">
+                <GlassCard className="p-6 md:p-10 flex flex-col items-center h-full relative overflow-hidden">
                   <h3 className="text-2xl font-bold text-slate-800 mb-2">{selectedRecord.studentName} 的射擊報告</h3>
                   <p className="text-slate-500 text-sm mb-6 font-mono tracking-wider bg-slate-100 px-3 py-1 rounded-full">{selectedRecord.timestamp}</p>
                   
                   {activeMode === 'Mode1' ? (
                     // ==========================================
-                    // 🎯 Mode 1 (單人靶紙) 的詳細視圖
+                    // 🎯 Mode 1 (單人靶紙)
                     // ==========================================
                     <>
                       <h4 className="text-xl text-blue-600 font-extrabold mb-8 bg-blue-50 px-6 py-2 rounded-full border border-blue-200">
@@ -410,23 +409,30 @@ const displayedRecords = useMemo(() => {
                     </>
                   ) : (
                     // ==========================================
-                    // 🧍‍♂️ Mode 4 (多人人型靶) 的詳細視圖
+                    // 🧍‍♂️ Mode 3 與 Mode 4 (共用動態定位渲染架構)
                     // ==========================================
                     <>
-                      <div className="flex gap-4 mb-8 relative w-full justify-center items-center">
-                        <h4 className="text-lg text-green-600 font-extrabold bg-green-50 px-5 py-2 rounded-full border border-green-200">
-                          命中：{selectedRecord.hitCount} 發
-                        </h4>
-                        <h4 className="text-lg text-slate-600 font-extrabold bg-slate-100 px-5 py-2 rounded-full border border-slate-200">
-                          總計：{selectedRecord.firedCount} 發
-                        </h4>
+                      <div className="flex gap-4 mb-6 relative w-full justify-center items-center">
+                        {activeMode === 'Mode3' ? (
+                           <h4 className="text-lg text-blue-600 font-extrabold bg-blue-50 px-6 py-2.5 rounded-full border border-blue-200 shadow-sm">
+                             總計成績：{selectedRecord.totalScore} 分
+                           </h4>
+                        ) : (
+                           <>
+                             <h4 className="text-lg text-green-600 font-extrabold bg-green-50 px-5 py-2 rounded-full border border-green-200">
+                               命中：{selectedRecord.hitCount} 發
+                             </h4>
+                             <h4 className="text-lg text-slate-600 font-extrabold bg-slate-100 px-5 py-2 rounded-full border border-slate-200">
+                               總計：{selectedRecord.firedCount} 發
+                             </h4>
+                           </>
+                        )}
                         
-                        {/* ★ 隱藏的工程模式開關 (長按 5 秒 Logo 後才會出現) */}
+                        {/* 隱藏的工程模式開關 */}
                         <AnimatePresence>
                           {isEngButtonVisible && (
                             <motion.button 
-                              initial={{ opacity: 0, scale: 0.8 }}
-                              animate={{ opacity: 1, scale: 1 }}
+                              initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
                               onClick={() => setShowEngMode(!showEngMode)}
                               className={`absolute right-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all border ${showEngMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
                             >
@@ -442,37 +448,35 @@ const displayedRecords = useMemo(() => {
                           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="w-full max-w-md overflow-hidden mb-6 z-50 relative">
                             <div className="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 text-white space-y-4">
                               <h5 className="font-bold text-slate-200 border-b border-slate-600 pb-2 flex justify-between">
-                                <span>🛠️ 靶紙視覺校正工具</span>
-                                <button onClick={() => setEngConfig(defaultEngConfig)} className="text-xs text-blue-400 hover:text-blue-300">重置預設</button>
+                                <span>🛠️ {activeMode === 'Mode3' ? '歸零靶' : '人型靶'} 視覺校正工具</span>
+                                <button onClick={() => setActiveEngConfig(activeDefaultEng)} className="text-xs text-blue-400 hover:text-blue-300">重置預設</button>
                               </h5>
                               <div className="space-y-3">
                                 <label className="text-xs font-bold text-slate-300 flex justify-between items-center">
-                                  <span>靶紙顯示寬度 ({engConfig.width}px)</span>
-                                  <input type="range" min="150" max="500" value={engConfig.width} onChange={(e)=>setEngConfig({...engConfig, width: Number(e.target.value)})} className="w-1/2" />
+                                  <span>靶紙顯示寬度 ({activeEngConfig.width}px)</span>
+                                  <input type="range" min="150" max="500" value={activeEngConfig.width} onChange={(e)=>setActiveEngConfig({...activeEngConfig, width: Number(e.target.value)})} className="w-1/2" />
                                 </label>
                                 <label className="text-xs font-bold text-slate-300 flex justify-between items-center">
-                                  <span>中心點 X 偏移 ({engConfig.offsetX}%)</span>
-                                  <input type="range" min="-50" max="50" step="0.5" value={engConfig.offsetX} onChange={(e)=>setEngConfig({...engConfig, offsetX: Number(e.target.value)})} className="w-1/2" />
+                                  <span>中心點 X 偏移 ({activeEngConfig.offsetX}%)</span>
+                                  <input type="range" min="-50" max="50" step="0.5" value={activeEngConfig.offsetX} onChange={(e)=>setActiveEngConfig({...activeEngConfig, offsetX: Number(e.target.value)})} className="w-1/2" />
                                 </label>
                                 <label className="text-xs font-bold text-slate-300 flex justify-between items-center">
-                                  <span>中心點 Y 偏移 ({engConfig.offsetY}%)</span>
-                                  <input type="range" min="-50" max="50" step="0.5" value={engConfig.offsetY} onChange={(e)=>setEngConfig({...engConfig, offsetY: Number(e.target.value)})} className="w-1/2" />
+                                  <span>中心點 Y 偏移 ({activeEngConfig.offsetY}%)</span>
+                                  <input type="range" min="-50" max="50" step="0.5" value={activeEngConfig.offsetY} onChange={(e)=>setActiveEngConfig({...activeEngConfig, offsetY: Number(e.target.value)})} className="w-1/2" />
                                 </label>
                                 <div className="border-t border-slate-600 pt-3 mt-1 space-y-3">
                                   <label className="text-xs font-bold text-yellow-300 flex justify-between items-center">
-                                    <span>↔️ 左右擴散倍率 ({engConfig.spreadX || 1}x)</span>
-                                    {/* ★ 上限調大到 10 */}
-                                    <input type="range" min="0.5" max="10" step="0.05" value={engConfig.spreadX || 1} onChange={(e)=>setEngConfig({...engConfig, spreadX: Number(e.target.value)})} className="w-1/2 accent-yellow-400" />
+                                    <span>↔️ 左右擴散倍率 ({activeEngConfig.spreadX || 1}x)</span>
+                                    <input type="range" min="0.5" max="10" step="0.05" value={activeEngConfig.spreadX || 1} onChange={(e)=>setActiveEngConfig({...activeEngConfig, spreadX: Number(e.target.value)})} className="w-1/2 accent-yellow-400" />
                                   </label>
                                   <label className="text-xs font-bold text-yellow-300 flex justify-between items-center">
-                                    <span>↕️ 上下擴散倍率 ({engConfig.spreadY || 1}x)</span>
-                                    {/* ★ 上限調大到 10 */}
-                                    <input type="range" min="0.5" max="10" step="0.05" value={engConfig.spreadY || 1} onChange={(e)=>setEngConfig({...engConfig, spreadY: Number(e.target.value)})} className="w-1/2 accent-yellow-400" />
+                                    <span>↕️ 上下擴散倍率 ({activeEngConfig.spreadY || 1}x)</span>
+                                    <input type="range" min="0.5" max="10" step="0.05" value={activeEngConfig.spreadY || 1} onChange={(e)=>setActiveEngConfig({...activeEngConfig, spreadY: Number(e.target.value)})} className="w-1/2 accent-yellow-400" />
                                   </label>
                                 </div>
                                 <label className="text-xs font-bold text-slate-300 flex justify-between items-center pt-2 border-t border-slate-600">
-                                  <span>彈孔顯示大小 ({engConfig.dotSize}px)</span>
-                                  <input type="range" min="8" max="30" value={engConfig.dotSize} onChange={(e)=>setEngConfig({...engConfig, dotSize: Number(e.target.value)})} className="w-1/2" />
+                                  <span>彈孔顯示大小 ({activeEngConfig.dotSize}px)</span>
+                                  <input type="range" min="8" max="30" value={activeEngConfig.dotSize} onChange={(e)=>setActiveEngConfig({...activeEngConfig, dotSize: Number(e.target.value)})} className="w-1/2" />
                                 </label>
                               </div>
                             </div>
@@ -480,30 +484,30 @@ const displayedRecords = useMemo(() => {
                         )}
                       </AnimatePresence>
 
-                      <div className="flex flex-col md:flex-row items-center gap-10 w-full justify-center">
-                        {/* 🌟 實體圖片與百分比座標疊加 (套用工程模式參數) */}
+                      <div className="flex flex-col md:flex-row items-center gap-10 w-full justify-center pb-4">
+                        {/* 實體圖片與百分比座標疊加 */}
                         <div 
-                           className="relative bg-slate-100 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.1)] border border-slate-200 overflow-hidden shrink-0"
-                           style={{ width: `${engConfig.width}px`, aspectRatio: '2/3' }}
+                           className="relative bg-slate-100 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.1)] border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center"
+                           style={{ width: `${activeEngConfig.width}px` }}
                         >
                           {showEngMode && (
                              <>
-                               <div className="absolute left-0 right-0 h-[1px] bg-red-500/50 pointer-events-none z-0" style={{ bottom: `calc(50% + ${engConfig.offsetY}%)` }}></div>
-                               <div className="absolute top-0 bottom-0 w-[1px] bg-red-500/50 pointer-events-none z-0" style={{ left: `calc(50% + ${engConfig.offsetX}%)` }}></div>
-                               <div className="absolute w-2 h-2 rounded-full bg-red-500 pointer-events-none z-0 transform -translate-x-1/2 translate-y-1/2" style={{ left: `calc(50% + ${engConfig.offsetX}%)`, bottom: `calc(50% + ${engConfig.offsetY}%)` }}></div>
+                               <div className="absolute left-0 right-0 h-[1px] bg-red-500/50 pointer-events-none z-0" style={{ bottom: `calc(50% + ${activeEngConfig.offsetY}%)` }}></div>
+                               <div className="absolute top-0 bottom-0 w-[1px] bg-red-500/50 pointer-events-none z-0" style={{ left: `calc(50% + ${activeEngConfig.offsetX}%)` }}></div>
+                               <div className="absolute w-2 h-2 rounded-full bg-red-500 pointer-events-none z-0 transform -translate-x-1/2 translate-y-1/2" style={{ left: `calc(50% + ${activeEngConfig.offsetX}%)`, bottom: `calc(50% + ${activeEngConfig.offsetY}%)` }}></div>
                              </>
                           )}
 
                           <img 
-                            src="/Silhouettetarget.png" 
-                            alt="人型靶" 
-                            className="w-full h-full object-fill pointer-events-none relative z-10" 
+                            src={activeMode === 'Mode3' ? "/Zero.png" : "/Silhouettetarget.png"} 
+                            alt={activeMode === 'Mode3' ? "歸零靶" : "人型靶"} 
+                            className="w-full h-auto object-contain pointer-events-none relative z-10" 
                           />
                           
                           {/* 動態渲染彈孔 */}
                           {selectedRecord.hitPositions && selectedRecord.hitPositions.map((pos, i) => {
-                             const sX = engConfig.spreadX || 1.0;
-                             const sY = engConfig.spreadY || 1.0;
+                             const sX = activeEngConfig.spreadX || 1.0;
+                             const sY = activeEngConfig.spreadY || 1.0;
 
                              return (
                                <motion.div
@@ -511,33 +515,48 @@ const displayedRecords = useMemo(() => {
                                  initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3 + (i * 0.1), type: "spring" }}
                                  className="absolute bg-red-500 rounded-full border-2 border-white shadow-md transform -translate-x-1/2 translate-y-1/2 z-20"
                                  style={{
-                                   width: `${engConfig.dotSize}px`, height: `${engConfig.dotSize}px`,
-                                   left: `calc(50% + ${engConfig.offsetX}% + ${pos.x * sX * 100}%)`,
-                                   bottom: `calc(50% + ${engConfig.offsetY}% + ${pos.y * sY * 100}%)`
+                                   width: `${activeEngConfig.dotSize}px`, height: `${activeEngConfig.dotSize}px`,
+                                   left: `calc(50% + ${activeEngConfig.offsetX}% + ${pos.x * sX * 100}%)`,
+                                   bottom: `calc(50% + ${activeEngConfig.offsetY}% + ${pos.y * sY * 100}%)`
                                  }}
                                />
                              );
                           })}
                         </div>
 
-                        {/* 右側詳細資料 */}
+                        {/* 右側詳細資料卡片 */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 min-w-[220px] shadow-sm">
                            <h5 className="text-slate-600 font-bold mb-4 border-b border-slate-200 pb-2">測驗統計</h5>
                            <div className="space-y-4 text-lg">
-                             <div className="flex justify-between items-center">
-                               <span className="text-slate-500 font-medium">命中</span>
-                               <span className="font-extrabold text-green-600">{selectedRecord.hitCount}</span>
-                             </div>
-                             <div className="flex justify-between items-center">
-                               <span className="text-slate-500 font-medium">脫靶</span>
-                               <span className="font-extrabold text-red-500">{selectedRecord.firedCount - selectedRecord.hitCount}</span>
-                             </div>
-                             <div className="flex justify-between items-center pt-3 border-t border-slate-200">
-                               <span className="text-slate-500 font-medium">命中率</span>
-                               <span className="font-extrabold text-blue-600">
-                                 {((selectedRecord.hitCount / selectedRecord.firedCount) * 100).toFixed(1)}%
-                               </span>
-                             </div>
+                             {activeMode === 'Mode3' ? (
+                               <>
+                                 <div className="flex justify-between items-center">
+                                   <span className="text-slate-500 font-medium">總分</span>
+                                   <span className="font-extrabold text-blue-600">{selectedRecord.totalScore} 分</span>
+                                 </div>
+                                 <div className="flex justify-between items-center">
+                                   <span className="text-slate-500 font-medium">射擊發數</span>
+                                   <span className="font-extrabold text-slate-800">{selectedRecord.hitPositions?.length || 0} 發</span>
+                                 </div>
+                               </>
+                             ) : (
+                               <>
+                                 <div className="flex justify-between items-center">
+                                   <span className="text-slate-500 font-medium">命中</span>
+                                   <span className="font-extrabold text-green-600">{selectedRecord.hitCount}</span>
+                                 </div>
+                                 <div className="flex justify-between items-center">
+                                   <span className="text-slate-500 font-medium">脫靶</span>
+                                   <span className="font-extrabold text-red-500">{selectedRecord.firedCount - selectedRecord.hitCount}</span>
+                                 </div>
+                                 <div className="flex justify-between items-center pt-3 border-t border-slate-200">
+                                   <span className="text-slate-500 font-medium">命中率</span>
+                                   <span className="font-extrabold text-blue-600">
+                                     {((selectedRecord.hitCount / selectedRecord.firedCount) * 100).toFixed(1)}%
+                                   </span>
+                                 </div>
+                               </>
+                             )}
                            </div>
                         </div>
                       </div>
